@@ -1,8 +1,26 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://192.168.145.122:5000/api';
+export const getApiUrl = () => {
+    return localStorage.getItem('api_url') || import.meta.env.VITE_API_URL || 'http://192.168.145.122:5000/api';
+};
+
+export const setApiUrl = (url) => {
+    if (url) {
+        localStorage.setItem('api_url', url.trim());
+    } else {
+        localStorage.removeItem('api_url');
+    }
+};
+
+const API_URL = {
+    toString() {
+        return getApiUrl();
+    }
+};
 
 const api = {
+    getApiUrl,
+    setApiUrl,
     login: (username, password, db_type = 'oracle') => axios.post(`${API_URL}/login`, { username, password, db_type }),
 
     getEncargos: () => axios.get(`${API_URL}/encargos`),

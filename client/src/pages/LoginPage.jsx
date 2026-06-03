@@ -10,6 +10,8 @@ const LoginPage = ({ onLogin }) => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [lastAttempt, setLastAttempt] = useState({ username: '', password: '' });
+    const [showSettings, setShowSettings] = useState(false);
+    const [apiUrl, setApiUrlState] = useState(api.getApiUrl());
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -136,6 +138,58 @@ const LoginPage = ({ onLogin }) => {
                         {loading ? 'Conectando...' : 'Acceder'}
                     </button>
                 </form>
+
+                <div style={{ marginTop: '1.5rem', width: '100%', textAlign: 'center' }}>
+                    <button
+                        type="button"
+                        onClick={() => setShowSettings(!showSettings)}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-main)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            textDecoration: 'underline',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            opacity: 0.7
+                        }}
+                    >
+                        ⚙️ {showSettings ? 'Ocultar Configuración' : 'Configurar Servidor API'}
+                    </button>
+                </div>
+
+                {showSettings && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        style={{ width: '100%', marginTop: '1rem' }}
+                    >
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>URL del Servidor API</label>
+                            <input
+                                type="text"
+                                className="form-control"
+                                value={apiUrl}
+                                onChange={e => {
+                                    setApiUrlState(e.target.value);
+                                    api.setApiUrl(e.target.value);
+                                }}
+                                style={{
+                                    padding: '0.6rem',
+                                    fontSize: '0.85rem',
+                                    backgroundColor: 'var(--input-bg)',
+                                    color: 'var(--input-text)'
+                                }}
+                                placeholder="http://192.168.145.122:5000/api"
+                            />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                                Se guarda en localStorage de este navegador.
+                            </span>
+                        </div>
+                    </motion.div>
+                )}
             </motion.div>
         </div>
     );

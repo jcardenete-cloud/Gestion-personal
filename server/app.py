@@ -339,18 +339,18 @@ def backup_import():
                     if db_type == 'postgres':
                         if 'ID_VACACION' in clean_row and clean_row['ID_VACACION'] is not None:
                             query = """
-                                INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO)
-                                VALUES (:ID_VACACION, :REF_PER, :DURACION, TO_DATE(:FECHA_DESDE, 'YYYY-MM-DD'), TO_DATE(:FECHA_HASTA, 'YYYY-MM-DD'), :PARTICION_NUM, :ORIGEN_FICHERO)
+                                INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
+                                VALUES (:ID_VACACION, :REF_PER, :DURACION, CAST(:FECHA_DESDE AS DATE), CAST(:FECHA_HASTA AS DATE), :PARTICION_NUM, :ORIGEN_FICHERO, CURRENT_TIMESTAMP)
                             """
                         else:
                             query = """
-                                INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO)
-                                VALUES (:REF_PER, :DURACION, TO_DATE(:FECHA_DESDE, 'YYYY-MM-DD'), TO_DATE(:FECHA_HASTA, 'YYYY-MM-DD'), :PARTICION_NUM, :ORIGEN_FICHERO)
+                                INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
+                                VALUES (:REF_PER, :DURACION, CAST(:FECHA_DESDE AS DATE), CAST(:FECHA_HASTA AS DATE), :PARTICION_NUM, :ORIGEN_FICHERO, CURRENT_TIMESTAMP)
                             """
                     else:
                         query = """
-                            INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO)
-                            VALUES (SEQ_VACACIONES.NEXTVAL, :REF_PER, :DURACION, TO_DATE(:FECHA_DESDE, 'YYYY-MM-DD'), TO_DATE(:FECHA_HASTA, 'YYYY-MM-DD'), :PARTICION_NUM, :ORIGEN_FICHERO)
+                            INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
+                            VALUES (SEQ_VACACIONES.NEXTVAL, :REF_PER, :DURACION, TO_DATE(:FECHA_DESDE, 'YYYY-MM-DD'), TO_DATE(:FECHA_HASTA, 'YYYY-MM-DD'), :PARTICION_NUM, :ORIGEN_FICHERO, SYSDATE)
                         """
                     execute_query(query, clean_row, is_select=False)
                 inserted_counts['VACACIONES'] = len(backup_data['VACACIONES'])
@@ -549,15 +549,16 @@ def import_vacaciones():
                 continue
                 
             if db_type == 'postgres':
+                # PostgreSQL: CAST for date conversion, CURRENT_TIMESTAMP for automatic fecha_carga
                 query = """
-                    INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO)
-                    VALUES (:ref_per, :duracion, TO_DATE(:fecha_desde, 'YYYY-MM-DD'), TO_DATE(:fecha_hasta, 'YYYY-MM-DD'), :particion_num, :origen_fichero)
+                    INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
+                    VALUES (:ref_per, :duracion, CAST(:fecha_desde AS DATE), CAST(:fecha_hasta AS DATE), :particion_num, :origen_fichero, CURRENT_TIMESTAMP)
                 """
             else:
-                # Oracle with Sequence
+                # Oracle with Sequence and SYSDATE for fecha_carga
                 query = """
-                    INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO)
-                    VALUES (SEQ_VACACIONES.NEXTVAL, :ref_per, :duracion, TO_DATE(:fecha_desde, 'YYYY-MM-DD'), TO_DATE(:fecha_hasta, 'YYYY-MM-DD'), :particion_num, :origen_fichero)
+                    INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
+                    VALUES (SEQ_VACACIONES.NEXTVAL, :ref_per, :duracion, TO_DATE(:fecha_desde, 'YYYY-MM-DD'), TO_DATE(:fecha_hasta, 'YYYY-MM-DD'), :particion_num, :origen_fichero, SYSDATE)
                 """
                 
             params = {

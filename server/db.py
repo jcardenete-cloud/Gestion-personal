@@ -47,14 +47,16 @@ def get_connection():
                     host=f'/cloudsql/{instance_connection_name}'
                 )
             else:
-                # Standard IP connection for local development
+                # En producción (Render), la contraseña viene de la variable de entorno PG_PASSWORD
+                # En local, se usa la contraseña introducida en el formulario de login
                 conn_user = user
+                conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
                 if 'pooler.supabase.com' in config.PG_HOST and '.' not in conn_user and config.PG_PROJECT_REF:
                     conn_user = f"{conn_user}.{config.PG_PROJECT_REF}"
                 print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={conn_user}")
                 conn = psycopg2.connect(
                     user=conn_user,
-                    password=password,
+                    password=conn_password,
                     host=config.PG_HOST,
                     port=config.PG_PORT,
                     database=config.PG_DB,

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: gestion-personal-backend
+    runtime: python
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_prod.py
+    plan: free
+    envVars:
+      - key: PG_HOST
+        value: aws-1-eu-west-2.pooler.supabase.com
+      - key: PG_PROJECT_REF
+        value: jecqveavazmvmxsbahmr
+      - key: PG_DATABASE
+        value: postgres
+      - key: PG_SCHEMA
+        value: jcf
+      - key: PG_PORT
+        value: "5432"
+      - key: PG_PASSWORD
+        sync: false   # Se introduce manualmente en el dashboard de Render (secreto)

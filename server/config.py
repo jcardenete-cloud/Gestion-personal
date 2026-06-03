@@ -20,14 +20,17 @@ class Config:
         self.DB_PASSWORD = props.get('db.password', 'oracle')
         self.DB_DSN = props.get('db.dsn', 'localhost:1521/xe')
         self.DB_CLIENT_PATH = props.get('db.client_path', None)
-        
-        # PostgreSQL defaults
-        self.PG_HOST = props.get('pg.host', 'aws-1-eu-west-2.pooler.supabase.com')
-        self.PG_PROJECT_REF = props.get('pg.project_ref', 'jecqveavazmvmxsbahmr')
-        self.PG_DB = props.get('pg.database', 'postgres')
-        self.PG_SCHEMA = props.get('pg.schema', 'jcf')
-        self.PG_PORT = props.get('pg.port', '5432')
-        
+
+        # PostgreSQL — las variables de entorno tienen prioridad (Render/producción)
+        # Si no existen, se usa database.properties (desarrollo local)
+        self.PG_HOST = os.environ.get('PG_HOST') or props.get('pg.host', 'aws-1-eu-west-2.pooler.supabase.com')
+        self.PG_PROJECT_REF = os.environ.get('PG_PROJECT_REF') or props.get('pg.project_ref', 'jecqveavazmvmxsbahmr')
+        self.PG_DB = os.environ.get('PG_DATABASE') or props.get('pg.database', 'postgres')
+        self.PG_SCHEMA = os.environ.get('PG_SCHEMA') or props.get('pg.schema', 'jcf')
+        self.PG_PORT = os.environ.get('PG_PORT') or props.get('pg.port', '5432')
+        # La contraseña SOLO viene de variable de entorno (nunca del fichero en producción)
+        self.PG_PASSWORD = os.environ.get('PG_PASSWORD') or None
+
         self.PORT = int(os.environ.get('PORT', 5000))
 
 config = Config()

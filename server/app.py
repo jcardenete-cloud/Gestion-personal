@@ -418,25 +418,18 @@ def check_and_create_vacaciones_table():
     db_type = getattr(g, 'db_type', 'oracle')
     if db_type == 'postgres':
         try:
-            # Check if the table exists and has the id_vacacion column as SERIAL
+            # Check if the table exists
             check_query = """
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='vacaciones' AND column_name='id_vacacion' 
-                AND is_identity='YES'
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name='vacaciones'
             """
             result = execute_query(check_query)
             if result and len(result) > 0:
-                # Table exists with proper SERIAL column
+                # Table already exists, don't touch it
                 return
             
-            # If we get here, either the table doesn't exist or the column isn't SERIAL
-            # Drop the old table if it exists and recreate it properly
-            logging.info("Recreating VACACIONES table for Postgres with proper SERIAL column...")
-            try:
-                execute_query("DROP TABLE IF EXISTS vacaciones CASCADE", is_select=False)
-            except:
-                pass
-            
+            # Table doesn't exist, create it
+            logging.info("Creating VACACIONES table for Postgres...")
             create_sql = """
                 CREATE TABLE vacaciones (
                     id_vacacion SERIAL PRIMARY KEY,
@@ -452,32 +445,25 @@ def check_and_create_vacaciones_table():
             execute_query(create_sql, is_select=False)
         except Exception as e:
             logging.error(f"Error checking/creating VACACIONES table: {e}")
-            raise
+            # Don't raise - if table already exists in some form, continue anyway
 
 def check_and_create_festivos_table():
     from flask import g
     db_type = getattr(g, 'db_type', 'oracle')
     if db_type == 'postgres':
         try:
-            # Check if the table exists and has the id_festivo column as SERIAL
+            # Check if the table exists
             check_query = """
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name='festivos' AND column_name='id_festivo' 
-                AND is_identity='YES'
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name='festivos'
             """
             result = execute_query(check_query)
             if result and len(result) > 0:
-                # Table exists with proper SERIAL column
+                # Table already exists, don't touch it
                 return
             
-            # If we get here, either the table doesn't exist or the column isn't SERIAL
-            # Drop the old table if it exists and recreate it properly
-            logging.info("Recreating FESTIVOS table for Postgres with proper SERIAL column...")
-            try:
-                execute_query("DROP TABLE IF EXISTS festivos CASCADE", is_select=False)
-            except:
-                pass
-            
+            # Table doesn't exist, create it
+            logging.info("Creating FESTIVOS table for Postgres...")
             create_sql = """
                 CREATE TABLE festivos (
                     id_festivo SERIAL PRIMARY KEY,
@@ -490,7 +476,7 @@ def check_and_create_festivos_table():
             execute_query(create_sql, is_select=False)
         except Exception as e:
             logging.error(f"Error checking/creating FESTIVOS table: {e}")
-            raise
+            # Don't raise - if table already exists in some form, continue anyway
     else:
         try:
             execute_query("SELECT 1 FROM FESTIVOS WHERE ROWNUM = 1")

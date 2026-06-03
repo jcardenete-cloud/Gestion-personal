@@ -182,7 +182,7 @@ const LoginPage = ({ onLogin }) => {
                                     backgroundColor: 'var(--input-bg)',
                                     color: 'var(--input-text)'
                                 }}
-                                placeholder="http://192.168.145.122:5000/api"
+                                placeholder="https://gestion-personal-backend.onrender.com/api"
                             />
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
                                 Se guarda en localStorage de este navegador.

@@ -1,7 +1,19 @@
 import axios from 'axios';
 
 export const getApiUrl = () => {
-    return localStorage.getItem('api_url') || import.meta.env.VITE_API_URL || 'http://192.168.145.122:5000/api';
+    // Priority: localStorage > environment variable > production default > development default
+    const stored = localStorage.getItem('api_url');
+    if (stored) return stored;
+    
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl) return envUrl;
+    
+    // Use Render backend in production, local backend in development
+    if (import.meta.env.PROD) {
+        return 'https://gestion-personal-backend.onrender.com/api';
+    }
+    
+    return 'http://192.168.145.122:5000/api';
 };
 
 export const setApiUrl = (url) => {

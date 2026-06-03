@@ -6,21 +6,13 @@ Thumbs.db
 *.log
 *.xlsx
 
-# Python / Server
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
-.venv/
-env/
-.env
-*.env
-instance/
-.pytest_cache/
-*.log
-
 # Server Configuration & Secrets
 server/database.properties
+
+# Environment files (allow production config for client)
+.env
+*.local.env
+client/.env.local
 
 # Node / Client
 node_modules/

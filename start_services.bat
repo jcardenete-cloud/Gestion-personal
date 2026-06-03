@@ -1,9 +1,9 @@
 @echo off
-cd /d "e:\fcardene\Utiles\Repositorio_DevOps\Gestion-Personal\server"
+cd /d "%~dp0server"
 echo Iniciando Backend...
 start /B python app.py > nul
 
-cd /d "e:\fcardene\Utiles\Repositorio_DevOps\Gestion-Personal\client"
+cd /d "%~dp0client"
 echo Iniciando Frontend...
 start /B npm run dev > nul
 

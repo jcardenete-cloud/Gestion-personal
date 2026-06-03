@@ -1,6 +1,6 @@
 $WshShell = New-Object -ComObject WScript.Shell
-$DesktopPath = "C:\Users\fcardene\Desktop"
-$ProjectDir = "e:\fcardene\Utiles\Repositorio_DevOps\Gestion-Personal"
+$DesktopPath = [System.IO.Path]::Combine([System.Environment]::GetFolderPath("Desktop"))
+$ProjectDir = $PSScriptRoot
 
 # Acceso directo para Arrancar
 $ShortcutStart = $WshShell.CreateShortcut("$DesktopPath\Arrancar Gestion Personal.lnk")

@@ -48,9 +48,12 @@ def get_connection():
                 )
             else:
                 # Standard IP connection for local development
-                print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={user}")
+                conn_user = user
+                if 'pooler.supabase.com' in config.PG_HOST and '.' not in conn_user and config.PG_PROJECT_REF:
+                    conn_user = f"{conn_user}.{config.PG_PROJECT_REF}"
+                print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={conn_user}")
                 conn = psycopg2.connect(
-                    user=user,
+                    user=conn_user,
                     password=password,
                     host=config.PG_HOST,
                     port=config.PG_PORT,

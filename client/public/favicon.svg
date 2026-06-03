@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E3A8A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D97706;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- App Icon Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+
+  <!-- Clipboard (Project Management) -->
+  <path d="M336 128H368C385.673 128 400 142.327 400 160V384C400 401.673 385.673 416 368 416H256C238.327 416 224 401.673 224 384V336" stroke="white" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M272 96H304C312.837 96 320 103.163 320 112V144C320 152.837 312.837 160 304 160H272C263.163 160 256 152.837 256 144V112C256 103.163 263.163 96 272 96Z" fill="white" />
+  
+  <!-- Checklist Lines -->
+  <line x1="288" y1="224" x2="336" y2="224" stroke="white" stroke-width="32" stroke-linecap="round" />
+  <line x1="288" y1="288" x2="336" y2="288" stroke="white" stroke-width="32" stroke-linecap="round" />
+  <line x1="288" y1="352" x2="312" y2="352" stroke="white" stroke-width="32" stroke-linecap="round" />
+
+  <!-- Person (HR/Personnel) -->
+  <circle cx="176" cy="224" r="56" fill="url(#accent)" stroke="#1E3A8A" stroke-width="16" />
+  <path d="M80 416C80 354.144 130.144 304 192 304C221.782 304 248.847 315.632 268.8 334.789" stroke="url(#accent)" stroke-width="48" stroke-linecap="round" fill="none" />
+  <!-- To prevent the person path from overlapping awkwardly we add an outer border to cut it out a bit -->
+  <path d="M72 416C72 349.726 125.726 296 192 296C224.225 296 253.486 308.686 275.051 329.539" stroke="#1E3A8A" stroke-width="16" stroke-linecap="round" fill="none" />
+</svg>

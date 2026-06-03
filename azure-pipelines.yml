@@ -1,0 +1,30 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+- group: Github-Tokens # Nombre del grupo de variables que creaste
+
+steps:
+- checkout: self
+  persistCredentials: true
+  clean: true
+
+- script: |
+    # Configurar la identidad de Git
+    git config --global user.email "devops-bot@azure.com"
+    git config --global user.name "Azure DevOps Bot"
+    
+    # Añadir el repositorio de GitHub como origen remoto utilizando el PAT
+    # Reemplaza 'usuario/repositorio' con tus datos reales de GitHub
+    git remote add github https://$(GITHUB_PAT)@://github.com
+    
+    # Sincronizar la rama actual con GitHub
+    git push github HEAD:main --force
+  displayName: 'Sincronizar repositorio con GitHub'

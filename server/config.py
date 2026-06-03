@@ -22,7 +22,7 @@ class Config:
         self.DB_CLIENT_PATH = props.get('db.client_path', None)
         
         # PostgreSQL defaults
-        self.PG_HOST = props.get('pg.host', '34.175.114.13')
+        self.PG_HOST = props.get('pg.host', 'aws-1-eu-west-2.pooler.supabase.com')
         self.PG_DB = props.get('pg.database', 'postgres')
         self.PG_SCHEMA = props.get('pg.schema', 'jcf')
         self.PG_PORT = props.get('pg.port', '5432')

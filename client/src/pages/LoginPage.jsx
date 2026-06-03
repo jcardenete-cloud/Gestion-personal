@@ -93,7 +93,7 @@ const LoginPage = ({ onLogin }) => {
                             style={{ padding: '0.8rem', backgroundColor: 'var(--input-bg)', color: 'var(--input-text)' }}
                         >
                             <option value="oracle">Oracle (Actual)</option>
-                            <option value="postgres">PostgreSQL (34.175.114.13)</option>
+                            <option value="postgres">PostgreSQL (aws-1-eu-west-2.pooler.supabase.com)</option>
                         </select>
                     </div>
 

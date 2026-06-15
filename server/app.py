@@ -25,6 +25,14 @@ def login():
     
     if not user or not password:
         return jsonify({"error": "Usuario y contraseña requeridos"}), 400
+
+    # Para PostgreSQL: validar la contraseña a nivel de aplicación antes de conectar.
+    # En producción (Render), PG_PASSWORD es la contraseña maestra de Supabase.
+    # El usuario debe introducir esa contraseña para poder acceder.
+    if db_type == 'postgres' and config.PG_PASSWORD:
+        if password.strip() != config.PG_PASSWORD.strip():
+            logging.warning(f"Login fallido para {user} en postgres: contraseña incorrecta")
+            return jsonify({"error": "Error de conexión (postgres): contraseña incorrecta"}), 401
         
     # Verify credentials by trying to connect
     try:

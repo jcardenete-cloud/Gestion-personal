@@ -47,28 +47,12 @@ def get_connection():
                     host=f'/cloudsql/{instance_connection_name}'
                 )
             else:
-                # En producción (Render), la contraseña por defecto viene de la variable de entorno PG_PASSWORD
-                # Si el usuario proporciona una contraseña, validamos que coincida con PG_PASSWORD si está configurada,
-                # de lo contrario intentamos conectar con la contraseña ingresada para validar.
+                # En producción (Render), PG_PASSWORD es la contraseña maestra de Supabase.
+                # La validación de la contraseña del usuario se hace en la ruta /api/login (app.py).
+                # Aquí simplemente usamos PG_PASSWORD para la conexión real si está disponible,
+                # o la contraseña introducida por el usuario si estamos en local (sin PG_PASSWORD).
                 conn_user = user
-                conn_password = None
-                try:
-                    from flask import g, has_app_context, has_request_context
-                    if (has_app_context() or has_request_context()) and hasattr(g, 'db_password') and g.db_password:
-                        user_pwd = g.db_password
-                        if config.PG_PASSWORD:
-                            if user_pwd == config.PG_PASSWORD:
-                                conn_password = config.PG_PASSWORD
-                            else:
-                                conn_password = user_pwd  # Usar la contraseña incorrecta para provocar fallo de conexión
-                        else:
-                            conn_password = user_pwd
-                except (ImportError, RuntimeError):
-                    pass
-
-                if not conn_password:
-                    conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
-
+                conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
                 if 'pooler.supabase.com' in config.PG_HOST and '.' not in conn_user and config.PG_PROJECT_REF:
                     conn_user = f"{conn_user}.{config.PG_PROJECT_REF}"
                 print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={conn_user}")

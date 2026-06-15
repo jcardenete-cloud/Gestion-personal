@@ -47,10 +47,20 @@ def get_connection():
                     host=f'/cloudsql/{instance_connection_name}'
                 )
             else:
-                # En producción (Render), la contraseña viene de la variable de entorno PG_PASSWORD
-                # En local, se usa la contraseña introducida en el formulario de login
+                # En producción (Render), la contraseña por defecto viene de la variable de entorno PG_PASSWORD
+                # Pero si el usuario proporciona credenciales en el login/petición, se usa la contraseña introducida
                 conn_user = user
-                conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
+                conn_password = None
+                try:
+                    from flask import g, has_app_context, has_request_context
+                    if (has_app_context() or has_request_context()) and hasattr(g, 'db_password') and g.db_password:
+                        conn_password = g.db_password
+                except (ImportError, RuntimeError):
+                    pass
+
+                if not conn_password:
+                    conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
+
                 if 'pooler.supabase.com' in config.PG_HOST and '.' not in conn_user and config.PG_PROJECT_REF:
                     conn_user = f"{conn_user}.{config.PG_PROJECT_REF}"
                 print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={conn_user}")

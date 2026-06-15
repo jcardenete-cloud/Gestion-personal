@@ -9,7 +9,6 @@ const LoginPage = ({ onLogin }) => {
     const [dbType, setDbType] = useState('oracle');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [lastAttempt, setLastAttempt] = useState({ username: '', password: '' });
     const [showSettings, setShowSettings] = useState(false);
     const [apiUrl, setApiUrlState] = useState(api.getApiUrl());
 
@@ -17,9 +16,7 @@ const LoginPage = ({ onLogin }) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-
         const cleanUsername = username.trim();
-        setLastAttempt({ username: cleanUsername, password });
 
         try {
             await api.login(cleanUsername, password, dbType);
@@ -77,11 +74,6 @@ const LoginPage = ({ onLogin }) => {
                         textAlign: 'center'
                     }}>
                         <div>{error}</div>
-                        <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#fde2e2', textAlign: 'left' }}>
-                            <strong>Último intento:</strong>
-                            <div>Usuario: <code>{lastAttempt.username}</code></div>
-                            <div>Contraseña: <code>{lastAttempt.password}</code></div>
-                        </div>
                     </div>
                 )}
 

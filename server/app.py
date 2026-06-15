@@ -26,13 +26,15 @@ def login():
     if not user or not password:
         return jsonify({"error": "Usuario y contraseña requeridos"}), 400
 
-    # Para PostgreSQL: validar la contraseña a nivel de aplicación antes de conectar.
-    # En producción (Render), PG_PASSWORD es la contraseña maestra de Supabase.
-    # El usuario debe introducir esa contraseña para poder acceder.
+    # Para PostgreSQL en producción: validar la contraseña a nivel de aplicación.
+    # PG_PASSWORD es la contraseña maestra del proyecto Supabase (configurada en Render).
     if db_type == 'postgres' and config.PG_PASSWORD:
-        if password.strip() != config.PG_PASSWORD.strip():
-            logging.warning(f"Login fallido para {user} en postgres: contraseña incorrecta")
-            return jsonify({"error": "Error de conexión (postgres): contraseña incorrecta"}), 401
+        entered = (password or '').strip()
+        expected = config.PG_PASSWORD.strip()
+        logging.info(f"Postgres login: PG_PASSWORD configurado, validando contraseña para user={user}")
+        if entered != expected:
+            logging.warning(f"Postgres login fallido para {user}: contraseña no coincide con PG_PASSWORD")
+            return jsonify({"error": "Contraseña incorrecta"}), 401
         
     # Verify credentials by trying to connect
     try:
@@ -48,7 +50,7 @@ def login():
         return jsonify({"status": "success", "user": user, "db_type": db_type})
     except Exception as e:
         logging.error(f"Login failed for {user} on {db_type}: {str(e)}")
-        return jsonify({"error": f"Error de conexión ({db_type}): {str(e)}"}), 401
+        return jsonify({"error": f"Error de conexión a la base de datos: {str(e)}"}), 401
 
 @app.before_request
 def before_request_func():
@@ -56,6 +58,19 @@ def before_request_func():
     g.db_user = request.headers.get('X-DB-User')
     g.db_password = request.headers.get('X-DB-Password')
     g.db_type = request.headers.get('X-DB-Type', 'oracle')
+
+@app.route('/api/debug/pg', methods=['GET'])
+def debug_pg():
+    """Endpoint de diagnóstico: muestra la configuración de PostgreSQL sin revelar secretos."""
+    return jsonify({
+        "PG_HOST": config.PG_HOST,
+        "PG_PORT": config.PG_PORT,
+        "PG_DB": config.PG_DB,
+        "PG_SCHEMA": config.PG_SCHEMA,
+        "PG_PROJECT_REF": config.PG_PROJECT_REF,
+        "PG_PASSWORD_configurado": bool(config.PG_PASSWORD),
+        "PG_PASSWORD_longitud": len(config.PG_PASSWORD) if config.PG_PASSWORD else 0,
+    })
 
 @app.route('/api/encargos', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_encargos():

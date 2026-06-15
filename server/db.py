@@ -48,13 +48,21 @@ def get_connection():
                 )
             else:
                 # En producción (Render), la contraseña por defecto viene de la variable de entorno PG_PASSWORD
-                # Pero si el usuario proporciona credenciales en el login/petición, se usa la contraseña introducida
+                # Si el usuario proporciona una contraseña, validamos que coincida con PG_PASSWORD si está configurada,
+                # de lo contrario intentamos conectar con la contraseña ingresada para validar.
                 conn_user = user
                 conn_password = None
                 try:
                     from flask import g, has_app_context, has_request_context
                     if (has_app_context() or has_request_context()) and hasattr(g, 'db_password') and g.db_password:
-                        conn_password = g.db_password
+                        user_pwd = g.db_password
+                        if config.PG_PASSWORD:
+                            if user_pwd == config.PG_PASSWORD:
+                                conn_password = config.PG_PASSWORD
+                            else:
+                                conn_password = user_pwd  # Usar la contraseña incorrecta para provocar fallo de conexión
+                        else:
+                            conn_password = user_pwd
                 except (ImportError, RuntimeError):
                     pass
 

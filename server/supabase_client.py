@@ -53,9 +53,15 @@ def select(table_name, filters=None, order=None, distinct=None, limit=None):
     builder = _table(table_name).select('*')
     builder = _apply_filters(builder, filters)
     if distinct:
-        builder = builder.select(distinct)
+        if isinstance(distinct, str):
+            builder = builder.select(distinct.lower())
+        else:
+            builder = builder.select(distinct)
     if order:
-        builder = builder.order(order)
+        if isinstance(order, str):
+            builder = builder.order(order.lower())
+        else:
+            builder = builder.order(order)
     if limit is not None:
         builder = builder.limit(limit)
     response = builder.execute()
@@ -63,6 +69,7 @@ def select(table_name, filters=None, order=None, distinct=None, limit=None):
 
 
 def select_distinct(table_name, field_name):
+    field_name = field_name.lower()
     response = _table(table_name).select(field_name).execute()
     rows = response.data or []
     values = sorted({row.get(field_name.lower()) for row in rows if row.get(field_name.lower()) is not None})

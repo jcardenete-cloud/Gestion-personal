@@ -76,7 +76,8 @@ def before_request_func():
     from flask import g
     g.db_user = request.headers.get('X-DB-User')
     g.db_password = request.headers.get('X-DB-Password')
-    g.db_type = request.headers.get('X-DB-Type', 'oracle')
+    g.db_type = request.headers.get('X-DB-Type') or ('postgres' if config.SUPABASE_URL else 'oracle')
+    logging.debug(f"[DB] Determined db_type: {g.db_type}")
 
 
 def is_postgres():

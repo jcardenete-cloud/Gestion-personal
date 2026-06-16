@@ -91,6 +91,11 @@ body {
   font-family: system_ui, sans-serif;
   font-size: 0.9rem;
   background-color: var(--bg-dark);
+  background-image: url('/src/assets/win11_bg.png');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;

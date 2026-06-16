@@ -31,6 +31,10 @@ class Config:
         # La contraseña SOLO viene de variable de entorno (nunca del fichero en producción)
         self.PG_PASSWORD = os.environ.get('PG_PASSWORD') or None
 
+        # Supabase HTTP API settings for Postgres access via SDK
+        self.SUPABASE_URL = os.environ.get('SUPABASE_URL') or props.get('supabase.url')
+        self.SUPABASE_KEY = os.environ.get('SUPABASE_KEY') or props.get('supabase.key')
+
         self.PORT = int(os.environ.get('PORT', 5000))
 
 config = Config()

@@ -1,5 +1,4 @@
 import oracledb
-import psycopg2
 import datetime
 import re
 import os
@@ -34,45 +33,7 @@ def get_connection():
         pass
 
     if db_type == 'postgres':
-        try:
-            # Check if we are running in Google Cloud Run
-            if os.environ.get('K_SERVICE'):
-                # Cloud SQL Proxy (Unix Socket) connection for GCP
-                instance_connection_name = 'project-47da493f-0c10-4e4f-945:europe-southwest1:personal'
-                print(f"DEBUG: Connecting to PostgreSQL via Cloud SQL Proxy socket: {instance_connection_name}")
-                conn = psycopg2.connect(
-                    user=user,
-                    password=password,
-                    database=config.PG_DB,
-                    host=f'/cloudsql/{instance_connection_name}'
-                )
-            else:
-                # En producción (Render), PG_PASSWORD es la contraseña maestra de Supabase.
-                # La validación de la contraseña del usuario se hace en la ruta /api/login (app.py).
-                # Aquí simplemente usamos PG_PASSWORD para la conexión real si está disponible,
-                # o la contraseña introducida por el usuario si estamos en local (sin PG_PASSWORD).
-                conn_user = user
-                conn_password = config.PG_PASSWORD if config.PG_PASSWORD else password
-                if 'pooler.supabase.com' in config.PG_HOST and '.' not in conn_user and config.PG_PROJECT_REF:
-                    conn_user = f"{conn_user}.{config.PG_PROJECT_REF}"
-                print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB} as user={conn_user}")
-                conn = psycopg2.connect(
-                    user=conn_user,
-                    password=conn_password,
-                    host=config.PG_HOST,
-                    port=config.PG_PORT,
-                    database=config.PG_DB,
-                    sslmode='require'
-                )
-            
-            if config.PG_SCHEMA:
-                with conn.cursor() as cur:
-                    cur.execute(f"SET search_path TO {config.PG_SCHEMA}")
-            
-            return conn
-        except Exception as e:
-            print(f"ERROR: Failed to connect to PostgreSQL: {e}")
-            raise
+        raise RuntimeError('Postgres direct DB connection is disabled; use Supabase API instead.')
     else:
         print(f"DEBUG: Connecting to Oracle at {config.DB_DSN} as user={user}")
         return oracledb.connect(
@@ -92,55 +53,28 @@ def execute_query(query, params=(), is_select=True):
         pass
 
     try:
-        conn = get_connection()
-        
-        # Adjust query for PostgreSQL if necessary (convert :param to %(param)s)
         if db_type == 'postgres':
-            # Convert Oracle style :param to Postgres style %(param)s
-            query = re.sub(r':([a-zA-Z0-9_]+)', r'%(\1)s', query)
-            # Handle Oracle-specific TO_DATE conversion
-            query = re.sub(r"TO_DATE\(%\(([a-zA-Z0-9_]+)\)s,\s*'YYYY-MM-DD'\)", r"%(\1)s::date", query)
-            # General fallback for TO_DATE if format varies
-            query = query.replace("TO_DATE(", "CAST(").replace("'YYYY-MM-DD')", "AS DATE")
+            raise RuntimeError('Postgres direct SQL execution is disabled. Use the Supabase HTTP API helpers in the application routes.')
 
+        conn = get_connection()
         cursor = conn.cursor()
-        
-        if db_type == 'postgres':
-            cursor.execute(query, params)
-            if is_select:
-                columns = [col[0] for col in cursor.description]
-                result = []
-                for row in cursor.fetchall():
-                    d = {}
-                    for col, val in zip(columns, row):
-                        if isinstance(val, (datetime.date, datetime.datetime)):
-                            d[col.upper()] = val.isoformat()
-                        else:
-                            d[col.upper()] = val
-                    result.append(d)
-                return result
-            else:
-                conn.commit()
-                return cursor.rowcount
+        cursor.execute(query, params)
+        if is_select:
+            columns = [col[0].upper() for col in cursor.description]
+            def row_to_dict(*args):
+                d = {}
+                for col, val in zip(columns, args):
+                    if isinstance(val, (datetime.date, datetime.datetime)):
+                        d[col] = val.isoformat()
+                    else:
+                        d[col] = val
+                return d
+            cursor.rowfactory = row_to_dict
+            result = cursor.fetchall()
+            return result
         else:
-            # Oracle
-            cursor.execute(query, params)
-            if is_select:
-                columns = [col[0].upper() for col in cursor.description]
-                def row_to_dict(*args):
-                    d = {}
-                    for col, val in zip(columns, args):
-                        if isinstance(val, (datetime.date, datetime.datetime)):
-                            d[col] = val.isoformat()
-                        else:
-                            d[col] = val
-                    return d
-                cursor.rowfactory = row_to_dict
-                result = cursor.fetchall()
-                return result
-            else:
-                conn.commit()
-                return cursor.rowcount
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         if conn:
             conn.rollback()

@@ -17,7 +17,7 @@ logging.basicConfig(filename='backend_debug.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s: %(message)s')
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization", "X-DB-User", "X-DB-Password", "X-DB-Type"])
 
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -91,6 +91,9 @@ def debug_pg():
         "PG_PROJECT_REF": config.PG_PROJECT_REF,
         "PG_PASSWORD_configurado": bool(config.PG_PASSWORD),
         "PG_PASSWORD_longitud": len(config.PG_PASSWORD) if config.PG_PASSWORD else 0,
+        "USANDO_SUPABASE": True,
+        "SUPABASE_URL_configurada": bool(config.SUPABASE_URL),
+        "SUPABASE_KEY_configurada": bool(config.SUPABASE_KEY),
     })
 
 @app.route('/api/encargos', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -598,7 +601,39 @@ def get_vacaciones():
     year = request.args.get('year')
     origen_fichero = request.args.get('origen_fichero')
     codigopr = request.args.get('codigopr')
-    
+
+    if is_postgres():
+        try:
+            vacations = sb_select('VACACIONES')
+            if ref_per:
+                vacations = [row for row in vacations if str(row.get('REF_PER')) == str(ref_per)]
+            if year:
+                vacations = [row for row in vacations if row.get('FECHA_DESDE') and str(row.get('FECHA_DESDE')).startswith(str(year))]
+            if origen_fichero:
+                vacations = [row for row in vacations if str(row.get('ORIGEN_FICHERO')) == str(origen_fichero)]
+            if codigopr:
+                proyectos = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
+                ref_pers = {str(row.get('REF_PER')) for row in proyectos}
+                vacations = [row for row in vacations if str(row.get('REF_PER')) in ref_pers]
+
+            personal_rows = sb_select('LISTA_PERSONAL')
+            personal_map = {str(person.get('REF_PER')): person for person in personal_rows}
+
+            result = []
+            for vac in vacations:
+                row = {**vac}
+                person = personal_map.get(str(vac.get('REF_PER')))
+                if person:
+                    row['NOMBRE'] = person.get('NOMBRE')
+                    row['APELLIDO1'] = person.get('APELLIDO1')
+                    row['APELLIDO2'] = person.get('APELLIDO2')
+                    row['PERFIL'] = person.get('PERFIL')
+                    row['USUARIO'] = person.get('USUARIO')
+                result.append(row)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     query = """
         SELECT v.ID_VACACION, v.REF_PER, v.DURACION, v.FECHA_DESDE, v.FECHA_HASTA, 
                v.PARTICION_NUM, v.ORIGEN_FICHERO, v.FECHA_CARGA,
@@ -640,6 +675,8 @@ def get_vacaciones():
 def get_vacaciones_ficheros():
     check_and_create_vacaciones_table()
     try:
+        if is_postgres():
+            return jsonify(sb_select_distinct('VACACIONES', 'ORIGEN_FICHERO'))
         query = "SELECT DISTINCT ORIGEN_FICHERO FROM VACACIONES WHERE ORIGEN_FICHERO IS NOT NULL ORDER BY ORIGEN_FICHERO"
         result = execute_query(query)
         return jsonify(result)
@@ -655,29 +692,42 @@ def import_vacaciones():
         
     inserted_count = 0
     try:
+        if is_postgres():
+            rows = []
+            for row in data:
+                fecha_desde = parse_iso_date(row.get('fecha_desde'))
+                fecha_hasta = parse_iso_date(row.get('fecha_hasta'))
+                if not fecha_desde or not fecha_hasta:
+                    continue
+                rows.append({
+                    'REF_PER': int(row['ref_per']),
+                    'DURACION': float(row.get('duracion')) if row.get('duracion') is not None else None,
+                    'FECHA_DESDE': fecha_desde.strftime('%Y-%m-%d') if isinstance(fecha_desde, (datetime.datetime, datetime.date)) else str(fecha_desde).split('T')[0],
+                    'FECHA_HASTA': fecha_hasta.strftime('%Y-%m-%d') if isinstance(fecha_hasta, (datetime.datetime, datetime.date)) else str(fecha_hasta).split('T')[0],
+                    'PARTICION_NUM': int(row['particion_num']) if row.get('particion_num') is not None else None,
+                    'ORIGEN_FICHERO': row.get('origen_fichero', 'Carga manual')
+                })
+            sb_insert('VACACIONES', rows)
+            inserted_count = len(rows)
+            return jsonify({"status": "success", "message": f"{inserted_count} periodos de vacaciones importados correctamente"}), 201
+
         from flask import g
         db_type = getattr(g, 'db_type', 'oracle')
-        
         for row in data:
             fecha_desde = parse_iso_date(row.get('fecha_desde'))
             fecha_hasta = parse_iso_date(row.get('fecha_hasta'))
-            
             if not fecha_desde or not fecha_hasta:
                 continue
-                
             if db_type == 'postgres':
-                # PostgreSQL: CAST for date conversion, CURRENT_TIMESTAMP for automatic fecha_carga
                 query = """
                     INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
                     VALUES (:ref_per, :duracion, CAST(:fecha_desde AS DATE), CAST(:fecha_hasta AS DATE), :particion_num, :origen_fichero, CURRENT_TIMESTAMP)
                 """
             else:
-                # Oracle with Sequence and SYSDATE for fecha_carga
                 query = """
                     INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
                     VALUES (SEQ_VACACIONES.NEXTVAL, :ref_per, :duracion, TO_DATE(:fecha_desde, 'YYYY-MM-DD'), TO_DATE(:fecha_hasta, 'YYYY-MM-DD'), :particion_num, :origen_fichero, SYSDATE)
                 """
-                
             params = {
                 "ref_per": int(row['ref_per']),
                 "duracion": float(row.get('duracion')) if row.get('duracion') is not None else None,
@@ -716,6 +766,16 @@ def update_vacacion():
         fecha_hasta = fecha_hasta.strftime('%Y-%m-%d')
 
     try:
+        if is_postgres():
+            sb_update('VACACIONES', {
+                'DURACION': float(duracion) if duracion is not None and duracion != '' else None,
+                'FECHA_DESDE': fecha_desde,
+                'FECHA_HASTA': fecha_hasta,
+                'PARTICION_NUM': int(particion_num) if particion_num is not None and particion_num != '' else None,
+                'ORIGEN_FICHERO': origen_fichero
+            }, {'ID_VACACION': int(id_vacacion)})
+            return jsonify({"status": "success", "message": "Periodo de vacaciones actualizado correctamente"})
+
         db_type = getattr(g, 'db_type', 'oracle')
         query = """
             UPDATE VACACIONES
@@ -749,6 +809,15 @@ def delete_vacaciones():
         return jsonify({"error": "Se requiere el ID de vacaciones o el nombre del fichero de origen"}), 400
 
     try:
+        if is_postgres():
+            if id_vacacion:
+                sb_delete('VACACIONES', {'ID_VACACION': int(id_vacacion)})
+                message = "Periodo de vacaciones eliminado correctamente"
+            else:
+                sb_delete('VACACIONES', {'ORIGEN_FICHERO': origen_fichero})
+                message = f"Todas las vacaciones del fichero '{origen_fichero}' han sido eliminadas"
+            return jsonify({"status": "success", "message": message})
+
         if id_vacacion:
             query = "DELETE FROM VACACIONES WHERE ID_VACACION = :id_vacacion"
             execute_query(query, {"id_vacacion": int(id_vacacion)}, is_select=False)
@@ -771,6 +840,17 @@ def manage_festivos():
     if request.method == 'GET':
         year = request.args.get('year')
         ref_ubi = request.args.get('ref_ubi')
+        if is_postgres():
+            filters = {}
+            if year:
+                filters['YEAR'] = int(year)
+            if ref_ubi:
+                filters['REF_UBI'] = int(ref_ubi)
+            try:
+                return jsonify(sb_select('FESTIVOS', filters))
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
         params = {}
         where = []
         query = "SELECT * FROM FESTIVOS"
@@ -798,12 +878,16 @@ def manage_festivos():
         if not year or not fecha:
             return jsonify({"error": "Se requieren 'year' y 'fecha'"}), 400
         try:
-            db_type = getattr(g, 'db_type', 'oracle')
-            if db_type == 'postgres':
-                query = "INSERT INTO festivos (year, ref_ubi, fecha, descripcion) VALUES (:year, :ref_ubi, TO_DATE(:fecha, 'YYYY-MM-DD'), :descripcion)"
-            else:
-                # Oracle sequence
-                query = "INSERT INTO FESTIVOS (ID_FESTIVO, YEAR, REF_UBI, FECHA, DESCRIPCION) VALUES (SEQ_FESTIVOS.NEXTVAL, :year, :ref_ubi, TO_DATE(:fecha, 'YYYY-MM-DD'), :descripcion)"
+            if is_postgres():
+                sb_insert('FESTIVOS', [{
+                    'YEAR': year,
+                    'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
+                    'FECHA': fecha,
+                    'DESCRIPCION': descripcion
+                }])
+                return jsonify({"status": "success"}), 201
+
+            query = "INSERT INTO FESTIVOS (ID_FESTIVO, YEAR, REF_UBI, FECHA, DESCRIPCION) VALUES (SEQ_FESTIVOS.NEXTVAL, :year, :ref_ubi, TO_DATE(:fecha, 'YYYY-MM-DD'), :descripcion)"
             params = { 'year': year, 'ref_ubi': int(ref_ubi) if ref_ubi is not None else None, 'fecha': fecha, 'descripcion': descripcion }
             execute_query(query, params, is_select=False)
             return jsonify({"status": "success"}), 201
@@ -820,6 +904,15 @@ def manage_festivos():
         fecha = data.get('fecha')
         descripcion = data.get('descripcion')
         try:
+            if is_postgres():
+                sb_update('FESTIVOS', {
+                    'YEAR': int(year) if year is not None else None,
+                    'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
+                    'FECHA': fecha,
+                    'DESCRIPCION': descripcion
+                }, {'ID_FESTIVO': int(id_festivo)})
+                return jsonify({"status": "success"})
+
             query = "UPDATE FESTIVOS SET YEAR=:year, REF_UBI=:ref_ubi, FECHA=TO_DATE(:fecha, 'YYYY-MM-DD'), DESCRIPCION=:descripcion WHERE ID_FESTIVO=:id_festivo"
             params = { 'year': int(year) if year is not None else None, 'ref_ubi': int(ref_ubi) if ref_ubi is not None else None, 'fecha': fecha, 'descripcion': descripcion, 'id_festivo': int(id_festivo) }
             execute_query(query, params, is_select=False)
@@ -832,6 +925,10 @@ def manage_festivos():
         if not id_festivo:
             return jsonify({"error": "Se requiere 'id' param para eliminar"}), 400
         try:
+            if is_postgres():
+                sb_delete('FESTIVOS', {'ID_FESTIVO': int(id_festivo)})
+                return jsonify({"status": "success"})
+
             query = "DELETE FROM FESTIVOS WHERE ID_FESTIVO = :id_festivo"
             execute_query(query, {'id_festivo': int(id_festivo)}, is_select=False)
             return jsonify({"status": "success"})

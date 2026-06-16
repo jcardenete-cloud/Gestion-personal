@@ -626,10 +626,17 @@ def check_and_create_festivos_table():
 def get_vacaciones():
     check_and_create_vacaciones_table()
     
-    ref_per = request.args.get('ref_per')
-    year = request.args.get('year')
-    origen_fichero = request.args.get('origen_fichero')
-    codigopr = request.args.get('codigopr')
+    def clean_arg(val):
+        if val in ('null', 'undefined', '', 'NaN'):
+            return None
+        return val
+
+    ref_per = clean_arg(request.args.get('ref_per'))
+    year = clean_arg(request.args.get('year'))
+    origen_fichero = clean_arg(request.args.get('origen_fichero'))
+    codigopr = clean_arg(request.args.get('codigopr'))
+    
+    logging.debug(f"[VACACIONES] Request args: ref_per={ref_per}, year={year}, origen_fichero={origen_fichero}, codigopr={codigopr}")
 
     if is_postgres():
         try:

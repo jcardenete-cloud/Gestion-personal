@@ -11,8 +11,15 @@ from supabase_client import (
 )
 from config import config
 import datetime
-import logging
-import os
+import sys
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    handlers=[
+        logging.FileHandler('backend_debug.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 logging.basicConfig(filename='backend_debug.log', level=logging.DEBUG, 
                     format='%(asctime)s %(levelname)s: %(message)s')
@@ -76,7 +83,8 @@ def before_request_func():
     from flask import g
     g.db_user = request.headers.get('X-DB-User')
     g.db_password = request.headers.get('X-DB-Password')
-    g.db_type = request.headers.get('X-DB-Type') or ('postgres' if config.SUPABASE_URL else 'oracle')
+    # Si Supabase está configurado, forzamos PostgreSQL; de lo contrario usamos X‑DB‑Type (default oracle)
+    g.db_type = 'postgres' if config.SUPABASE_URL else request.headers.get('X-DB-Type', 'oracle')
     logging.debug(f"[DB] Determined db_type: {g.db_type}")
 
 
@@ -99,6 +107,23 @@ def debug_pg():
         "SUPABASE_URL_configurada": bool(config.SUPABASE_URL),
         "SUPABASE_KEY_configurada": bool(config.SUPABASE_KEY),
     })
+
+@app.route('/api/debug/vacaciones', methods=['GET'])
+def debug_vacaciones():
+    from supabase_client import select as sb_select
+    try:
+        vacations = sb_select('VACACIONES')
+        return jsonify({
+            "count": len(vacations),
+            "sample": vacations[:2] if vacations else [],
+            "error": None
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 @app.route('/api/encargos', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_encargos():
@@ -609,6 +634,7 @@ def get_vacaciones():
     if is_postgres():
         try:
             vacations = sb_select('VACACIONES')
+            logging.debug(f"[VACACIONES] rows retrieved: {len(vacations)}")
             if ref_per:
                 vacations = [row for row in vacations if str(row.get('REF_PER')) == str(ref_per)]
             if year:
@@ -636,6 +662,8 @@ def get_vacaciones():
                 result.append(row)
             return jsonify(result)
         except Exception as e:
+            import traceback
+            logging.error(f"[VACACIONES] ERROR: {str(e)}\n{traceback.format_exc()}")
             return jsonify({"error": str(e)}), 500
 
     query = """

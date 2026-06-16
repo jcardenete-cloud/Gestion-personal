@@ -11,6 +11,11 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     )
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Default schema headers so PostgREST uses the correct schema (jcf)
+supabase.headers.update({
+    "Accept-Profile": os.getenv('SUPABASE_SCHEMA', 'jcf'),
+    "Content-Profile": os.getenv('SUPABASE_SCHEMA', 'jcf')
+})
 
 
 def _table(table_name):

@@ -17,7 +17,9 @@ logging.basicConfig(filename='backend_debug.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s: %(message)s')
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'dev_secret_key')
 CORS(app, resources={r"/api/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization", "X-DB-User", "X-DB-Password", "X-DB-Type"])
+
 
 @app.errorhandler(Exception)
 def handle_exception(e):

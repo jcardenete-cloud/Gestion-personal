@@ -1581,7 +1581,7 @@ const VacacionesPage = () => {
                         )}
                         
                         {/* Help Card */}
-                        <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', background: 'rgba(255,255,255,0.01)' }}>
+                        <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', background: 'rgba(255,255,255,0.08)' }}>
                             <Info size={20} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '0.15rem' }} />
                             <div>
                                 <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.2rem', color: 'var(--text-main)' }}>Guía de Formato y Estructura</h4>

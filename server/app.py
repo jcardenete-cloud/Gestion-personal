@@ -12,6 +12,9 @@ from supabase_client import (
 from config import config
 import datetime
 import sys
+import logging
+import os
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s %(levelname)s: %(message)s',
@@ -20,9 +23,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-
-logging.basicConfig(filename='backend_debug.log', level=logging.DEBUG, 
-                    format='%(asctime)s %(levelname)s: %(message)s')
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev_secret_key')

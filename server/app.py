@@ -12,6 +12,7 @@ from supabase_client import (
 from config import config
 import datetime
 import logging
+import os
 
 logging.basicConfig(filename='backend_debug.log', level=logging.DEBUG, 
                     format='%(asctime)s %(levelname)s: %(message)s')

@@ -11,17 +11,14 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     )
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-# Default schema headers so PostgREST uses the correct schema (jcf)
-supabase.headers.update({
-    "Accept-Profile": os.getenv('SUPABASE_SCHEMA', 'jcf'),
-    "Content-Profile": os.getenv('SUPABASE_SCHEMA', 'jcf')
-})
+
+# Default schema for Supabase (PostgREST) – can be overridden via env var
+SCHEMA = os.getenv('SUPABASE_SCHEMA', 'jcf')
 
 
 def _table(table_name):
-    schema = getattr(config, 'PG_SCHEMA', None)
-    builder = supabase.schema(schema).from_(table_name.lower()) if schema else supabase.from_(table_name.lower())
-    return builder
+    # Always query the configured schema; the SDK's .schema() returns a scoped client
+    return supabase.schema(SCHEMA).from_(table_name.lower())
 
 
 def _normalize_row_keys(data):

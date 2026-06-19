@@ -2277,6 +2277,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Año</label>
                                     <input
+                                        className="form-control"
                                         type="number"
                                         value={festivosTabYear}
                                         onChange={(e) => setFestivosTabYear(Number(e.target.value))}
@@ -2286,6 +2287,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Ubicación</label>
                                     <select
+                                        className="form-control"
                                         value={festivosTabRefUbi}
                                         onChange={(e) => setFestivosTabRefUbi(e.target.value)}
                                         style={{ width: '220px' }}
@@ -2304,6 +2306,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>De año:</label>
                                     <input
+                                        className="form-control"
                                         type="number"
                                         value={festivosCopyFromYear}
                                         onChange={(e) => setFestivosCopyFromYear(Number(e.target.value))}
@@ -2313,6 +2316,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>A año:</label>
                                     <input
+                                        className="form-control"
                                         type="number"
                                         value={festivosCopyToYear}
                                         onChange={(e) => setFestivosCopyToYear(Number(e.target.value))}
@@ -2340,6 +2344,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Fecha</label>
                                     <input
+                                        className="form-control"
                                         type="date"
                                         value={festivosForm.fecha}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, fecha: e.target.value }))}
@@ -2348,6 +2353,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Ubicación (vacío = Nacional)</label>
                                     <select
+                                        className="form-control"
                                         value={festivosForm.ref_ubi}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, ref_ubi: e.target.value }))}
                                         style={{ width: '220px' }}
@@ -2361,6 +2367,7 @@ const VacacionesPage = () => {
                                 <div className="form-group" style={{ margin: 0, flex: 1, minWidth: '180px' }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Descripción</label>
                                     <input
+                                        className="form-control"
                                         type="text"
                                         value={festivosForm.descripcion}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, descripcion: e.target.value }))}
@@ -2409,7 +2416,7 @@ const VacacionesPage = () => {
                                     <tbody>
                                         {festivosList.map(f => (
                                             <tr key={f.ID_FESTIVO || f.id_festivo}>
-                                                <td>{(f.FECHA || f.fecha || '').split('T')[0]}</td>
+                                                <td>{formatDateStr(f.FECHA || f.fecha)}</td>
                                                 <td>{f.REF_UBI != null ? `${f.REF_UBI}` : 'Nacional'}</td>
                                                 <td>{f.DESCRIPCION || f.descripcion}</td>
                                                 <td>

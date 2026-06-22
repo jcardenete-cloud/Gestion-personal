@@ -7,7 +7,7 @@ Thumbs.db
 *.xlsx
 
 # Server Configuration & Secrets
-server/database.properties
+# server/database.properties
 
 # Environment files (allow production config for client)
 .env

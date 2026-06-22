@@ -6,7 +6,7 @@ import api from '../api';
 const LoginPage = ({ onLogin }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [dbType, setDbType] = useState('oracle');
+    const [dbType, setDbType] = useState('postgres');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showSettings, setShowSettings] = useState(false);

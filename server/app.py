@@ -242,9 +242,26 @@ def manage_personal_proyectos():
     if request.method == 'GET':
         if is_postgres():
             if codigopr:
-                result = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
+                assignments = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
             else:
-                result = sb_select('PERSONAL_PROYECTOS')
+                assignments = sb_select('PERSONAL_PROYECTOS')
+            
+            try:
+                personal_rows = sb_select('LISTA_PERSONAL')
+                personal_map = {str(p.get('REF_PER')): p for p in personal_rows}
+                result = []
+                for a in assignments:
+                    row = {**a}
+                    person = personal_map.get(str(a.get('REF_PER')))
+                    if person:
+                        row['NOMBRE'] = person.get('NOMBRE')
+                        row['APELLIDO1'] = person.get('APELLIDO1')
+                        row['APELLIDO2'] = person.get('APELLIDO2')
+                        row['PERFIL'] = person.get('PERFIL')
+                    result.append(row)
+            except Exception as e:
+                logging.error(f"[PERSONAL_PROYECTOS] Error joining LISTA_PERSONAL: {str(e)}")
+                result = assignments
         else:
             if codigopr:
                 query = """SELECT pp.*, p.NOMBRE, p.APELLIDO1, p.APELLIDO2, p.PERFIL 

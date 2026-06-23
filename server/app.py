@@ -44,20 +44,27 @@ def login():
     if not user or not password:
         return jsonify({"error": "Usuario y contraseña requeridos"}), 400
 
-    # Para PostgreSQL en producción: validar la contraseña a nivel de aplicación.
-    # PG_PASSWORD es la contraseña maestra del proyecto Supabase (configurada en Render).
+    # Para PostgreSQL: validar credenciales intentando una conexión real con psycopg2.
     if db_type == 'postgres':
         if config.SUPABASE_URL is None or config.SUPABASE_KEY is None:
             return jsonify({"error": "Supabase no está configurado para PostgreSQL"}), 500
-        if config.PG_PASSWORD:
-            entered = (password or '').strip()
-            expected = config.PG_PASSWORD.strip()
-            logging.info(f"Postgres login: PG_PASSWORD configurado, validando contraseña para user={user}")
-            if entered != expected:
-                logging.warning(f"Postgres login fallido para {user}: contraseña no coincide con PG_PASSWORD")
-                return jsonify({"error": "Contraseña incorrecta"}), 401
+        try:
+            import psycopg2
+            logging.info(f"Postgres login: intentando conexión real para user={user} en {config.PG_HOST}:{config.PG_PORT}/{config.PG_DB}")
+            conn = psycopg2.connect(
+                host=config.PG_HOST,
+                port=int(config.PG_PORT),
+                dbname=config.PG_DB,
+                user=user,
+                password=password,
+                connect_timeout=5
+            )
+            conn.close()
+            logging.info(f"Postgres login exitoso para user={user}")
+        except Exception as e:
+            logging.warning(f"Postgres login fallido para {user}: {str(e)}")
+            return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
-        logging.info(f"Login successful for user={user} on db_type={db_type} using Supabase API")
         g.db_user = user
         g.db_password = password
         g.db_type = db_type

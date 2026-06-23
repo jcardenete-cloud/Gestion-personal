@@ -103,3 +103,11 @@ def delete(table_name, filters):
 def delete_all(table_name):
     response = _table(table_name).delete().execute()
     return response.data or []
+
+
+def find_by_usuario(usuario):
+    """Busca en LISTA_PERSONAL por el campo USUARIO (case-insensitive).
+    Devuelve la lista de filas que coinciden (normalmente 0 o 1).
+    """
+    response = _table('LISTA_PERSONAL').select('*').ilike('usuario', usuario).execute()
+    return _normalize_row_keys(response.data or [])

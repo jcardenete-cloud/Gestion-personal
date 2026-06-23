@@ -49,13 +49,22 @@ def login():
     if db_type == 'postgres':
         if config.SUPABASE_URL is None or config.SUPABASE_KEY is None:
             return jsonify({"error": "Supabase no está configurado para PostgreSQL"}), 500
+
+        # 1. Validar que el usuario coincide con PG_SCHEMA
+        expected_user = (config.PG_SCHEMA or '').strip().lower()
+        entered_user = (user or '').strip().lower()
+        if not expected_user or entered_user != expected_user:
+            logging.warning(f"Postgres login fallido: usuario '{user}' no coincide con PG_SCHEMA '{config.PG_SCHEMA}'")
+            return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
+
+        # 2. Validar contraseña contra PG_PASSWORD
         if config.PG_PASSWORD:
             entered = (password or '').strip()
             expected = config.PG_PASSWORD.strip()
             logging.info(f"Postgres login: PG_PASSWORD configurado, validando contraseña para user={user}")
             if entered != expected:
                 logging.warning(f"Postgres login fallido para {user}: contraseña no coincide con PG_PASSWORD")
-                return jsonify({"error": "Contraseña incorrecta"}), 401
+                return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
         logging.info(f"Login successful for user={user} on db_type={db_type} using Supabase API")
         g.db_user = user

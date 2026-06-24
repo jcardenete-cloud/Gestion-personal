@@ -43,7 +43,8 @@ pg.port=5432
 
 # Credenciales de API de Supabase para acceso HTTP
 supabase.url=https://tu_proyecto.supabase.co
-supabase.key=tu_supabase_anon_key
+# Se utiliza el service_role key en lugar del anon_key para omitir políticas de RLS
+supabase.service_role_key=tu_supabase_service_role_key
 ```
 
 ### Variables de Entorno (Producción / Render)
@@ -58,7 +59,7 @@ En entornos de producción (configurados en `render.yaml`), las siguientes varia
 - `PG_PORT`: Puerto (por defecto `5432`).
 - `PG_PASSWORD`: Contraseña de PostgreSQL (utilizada a nivel de aplicación para verificar el inicio de sesión en el modo Postgres).
 - `SUPABASE_URL`: URL del proyecto de Supabase.
-- `SUPABASE_KEY`: Clave de API (Service/Anon Key) de Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY`: Clave de API de rol de servicio (Service Role Key) de Supabase (con fallback a `SUPABASE_KEY` si se usa la clave antigua).
 
 4. Ejecuta el servidor de desarrollo local:
    ```bash

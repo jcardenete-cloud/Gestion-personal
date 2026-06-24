@@ -3,11 +3,16 @@ from supabase import create_client
 from config import config
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL') or getattr(config, 'SUPABASE_URL', None)
-SUPABASE_KEY = os.environ.get('SUPABASE_KEY') or getattr(config, 'SUPABASE_KEY', None)
+SUPABASE_KEY = (
+    os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+    or os.environ.get('SUPABASE_KEY')
+    or getattr(config, 'SUPABASE_SERVICE_ROLE_KEY', None)
+    or getattr(config, 'SUPABASE_KEY', None)
+)
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError(
-        'SUPABASE_URL and SUPABASE_KEY must be configured for Postgres access via Supabase.'
+        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY) must be configured for Postgres access via Supabase.'
     )
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)

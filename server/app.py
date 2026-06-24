@@ -47,7 +47,7 @@ def login():
     # Para PostgreSQL en producción: validar la contraseña a nivel de aplicación.
     # PG_PASSWORD es la contraseña maestra del proyecto Supabase (configurada en Render).
     if db_type == 'postgres':
-        if config.SUPABASE_URL is None or config.SUPABASE_KEY is None:
+        if config.SUPABASE_URL is None or config.SUPABASE_SERVICE_ROLE_KEY is None:
             return jsonify({"error": "Supabase no está configurado para PostgreSQL"}), 500
 
         # 1. Validar que el usuario coincide con PG_SCHEMA
@@ -114,7 +114,8 @@ def debug_pg():
         "PG_PASSWORD_longitud": len(config.PG_PASSWORD) if config.PG_PASSWORD else 0,
         "USANDO_SUPABASE": True,
         "SUPABASE_URL_configurada": bool(config.SUPABASE_URL),
-        "SUPABASE_KEY_configurada": bool(config.SUPABASE_KEY),
+        "SUPABASE_KEY_configurada": bool(config.SUPABASE_SERVICE_ROLE_KEY),
+        "SUPABASE_SERVICE_ROLE_KEY_configurada": bool(config.SUPABASE_SERVICE_ROLE_KEY),
     })
 
 @app.route('/api/debug/vacaciones', methods=['GET'])

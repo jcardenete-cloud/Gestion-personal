@@ -33,7 +33,13 @@ class Config:
 
         # Supabase HTTP API settings for Postgres access via SDK
         self.SUPABASE_URL = os.environ.get('SUPABASE_URL') or props.get('supabase.url')
-        self.SUPABASE_KEY = os.environ.get('SUPABASE_KEY') or props.get('supabase.key')
+        self.SUPABASE_SERVICE_ROLE_KEY = (
+            os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+            or os.environ.get('SUPABASE_KEY')
+            or props.get('supabase.service_role_key')
+            or props.get('supabase.key')
+        )
+        self.SUPABASE_KEY = self.SUPABASE_SERVICE_ROLE_KEY
 
         self.PORT = int(os.environ.get('PORT', 5000))
 

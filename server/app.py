@@ -135,6 +135,50 @@ def debug_vacaciones():
             "traceback": traceback.format_exc()
         }), 500
 
+@app.route('/api/debug/connection', methods=['GET'])
+def debug_connection():
+    """Diagnóstico completo de la conexión a Supabase."""
+    import traceback
+    from supabase_client import SUPABASE_URL, SUPABASE_KEY, SCHEMA, supabase
+
+    results = {
+        "supabase_url": SUPABASE_URL,
+        "supabase_key_prefix": SUPABASE_KEY[:20] + "..." if SUPABASE_KEY else None,
+        "supabase_key_length": len(SUPABASE_KEY) if SUPABASE_KEY else 0,
+        "schema": SCHEMA,
+        "tests": {}
+    }
+
+    # Test 1: consulta al esquema público (sin schema custom)
+    try:
+        resp = supabase.from_('lista_personal').select('*').limit(1).execute()
+        results["tests"]["public_schema_query"] = {
+            "status": "ok",
+            "rows": len(resp.data or [])
+        }
+    except Exception as e:
+        results["tests"]["public_schema_query"] = {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+    # Test 2: consulta al esquema jcf
+    try:
+        resp = supabase.schema(SCHEMA).from_('lista_personal').select('*').limit(1).execute()
+        results["tests"]["custom_schema_query"] = {
+            "status": "ok",
+            "rows": len(resp.data or [])
+        }
+    except Exception as e:
+        results["tests"]["custom_schema_query"] = {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+    return jsonify(results)
+
 @app.route('/api/encargos', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_encargos():
     if request.method == 'GET':

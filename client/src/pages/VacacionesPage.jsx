@@ -1240,7 +1240,7 @@ const VacacionesPage = () => {
                     </div>
                     <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>TOTAL DÍAS CARGADOS</span>
-                        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)' }}>{totalDays.toFixed(1)}</span>
+                        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)' }}>{totalDays.toFixed(0)}</span>
                     </div>
                 </div>
                 <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>

@@ -12,6 +12,11 @@ import * as XLSX from 'xlsx';
 const VacacionesPage = () => {
     const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'history', 'calendar', 'festivos'
     
+    // Available today tab state
+    const [availableTabVacations, setAvailableTabVacations] = useState([]);
+    const [availableTabLoading, setAvailableTabLoading] = useState(false);
+    const [availableSearchText, setAvailableSearchText] = useState('');
+
     // Master data
     const [nationalFestivos, setNationalFestivos] = useState(new Set());
     const [festivosByRef, setFestivosByRef] = useState({});
@@ -131,6 +136,18 @@ const VacacionesPage = () => {
             console.error("Error loading current year vacations:", err);
         } finally {
             setNoVacationsLoading(false);
+        }
+    };
+
+    const loadAvailableToday = async () => {
+        setAvailableTabLoading(true);
+        try {
+            const res = await api.getVacaciones(null, currentYear);
+            setAvailableTabVacations(res.data || []);
+        } catch (err) {
+            console.error("Error loading vacations for availability:", err);
+        } finally {
+            setAvailableTabLoading(false);
         }
     };
 
@@ -1154,6 +1171,65 @@ const VacacionesPage = () => {
         return activePersonalList.filter(person => !vacationRefs.has(person.REF_PER));
     }, [activePersonalList, currentYearVacations]);
 
+    const availableByLocation = useMemo(() => {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const d = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${y}-${m}-${d}`;
+
+        // Find who is on vacation today
+        const peopleOnVacationToday = new Set();
+        availableTabVacations.forEach(v => {
+            if (v.FECHA_DESDE && v.FECHA_HASTA) {
+                if (isDateInRange(todayStr, v.FECHA_DESDE, v.FECHA_HASTA)) {
+                    peopleOnVacationToday.add(v.REF_PER);
+                }
+            }
+        });
+
+        // Filter active people who are not on vacation today
+        let availablePeople = activePersonalList.filter(p => !peopleOnVacationToday.has(p.REF_PER));
+
+        // Filter by availableSearchText
+        if (availableSearchText) {
+            const s = normalizeString(availableSearchText);
+            availablePeople = availablePeople.filter(p => {
+                const fullName = normalizeString(`${p.NOMBRE || ''} ${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''}`);
+                const user = normalizeString(p.USUARIO || '');
+                return fullName.includes(s) || user.includes(s);
+            });
+        }
+
+        // Group by REF_UBI
+        const groups = {};
+        locations.forEach(loc => {
+            groups[loc.REF_UBI] = {
+                location: loc,
+                people: []
+            };
+        });
+
+        const noLocKey = 'no_location';
+        groups[noLocKey] = {
+            location: { REF_UBI: '', A_LUGAR: 'Sin Ubicación Asignada' },
+            people: []
+        };
+
+        availablePeople.forEach(p => {
+            const ubi = p.REF_UBI;
+            if (ubi && groups[ubi]) {
+                groups[ubi].people.push(p);
+            } else {
+                groups[noLocKey].people.push(p);
+            }
+        });
+
+        return Object.values(groups)
+            .filter(g => g.people.length > 0)
+            .sort((a, b) => String(a.location.A_LUGAR).localeCompare(String(b.location.A_LUGAR)));
+    }, [activePersonalList, availableTabVacations, locations, availableSearchText]);
+
     const filteredHistory = loadedVacaciones.filter(item => {
         // Search filter (Employee name, username or file)
         if (historySearch) {
@@ -1349,6 +1425,25 @@ const VacacionesPage = () => {
                     }}
                 >
                     <Calendar size={16} /> Sin Vacaciones {currentYear}
+                </button>
+                <button
+                    onClick={() => { setActiveTab('available-today'); loadAvailableToday(); }}
+                    style={{
+                        padding: '0.8rem 1.5rem',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        border: 'none',
+                        background: 'none',
+                        color: activeTab === 'available-today' ? 'var(--primary)' : 'var(--text-muted)',
+                        borderBottom: activeTab === 'available-today' ? '2px solid var(--primary)' : '2px solid transparent',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <CheckCircle2 size={16} /> Disponible Hoy
                 </button>
                 <button
                     onClick={() => setActiveTab('festivos')}
@@ -2496,6 +2591,67 @@ const VacacionesPage = () => {
                                 </table>
                             )}
                         </div>
+                    </motion.div>
+                ) : activeTab === 'available-today' ? (
+                    <motion.div
+                        key="available-today-tab"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div>
+                                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <CheckCircle2 size={18} color="var(--primary)" /> Personal Disponible por Ubicación
+                                </h3>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                                    Listado de personal activo hoy (<strong>{new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>) que no tiene vacaciones registradas en el día de hoy.
+                                </p>
+                            </div>
+                            <div style={{ position: 'relative', width: '280px' }}>
+                                <Search size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar empleado..."
+                                    className="form-control"
+                                    value={availableSearchText}
+                                    onChange={(e) => setAvailableSearchText(e.target.value)}
+                                    style={{ paddingLeft: '2.5rem', width: '100%' }}
+                                />
+                            </div>
+                        </div>
+
+                        {availableTabLoading ? (
+                            <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                Cargando información de disponibilidad...
+                            </div>
+                        ) : availableByLocation.length === 0 ? (
+                            <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                {availableSearchText ? 'No se encontraron empleados disponibles con ese filtro.' : 'No hay personal disponible en el día de hoy.'}
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                                {availableByLocation.map(group => (
+                                    <div key={group.location.REF_UBI || 'no_location'} className="glass-card" style={{ padding: '1.2rem' }}>
+                                        <h4 style={{ fontSize: '1rem', borderBottom: '1px solid var(--border-card)', paddingBottom: '0.5rem', marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 700 }}>{group.location.A_LUGAR}</span>
+                                            <span style={{ fontSize: '0.8rem', background: 'rgba(59,130,246,0.12)', color: 'var(--primary)', padding: '0.2rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
+                                                {group.people.length} {group.people.length === 1 ? 'disponible' : 'disponibles'}
+                                            </span>
+                                        </h4>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                            {group.people.map(person => (
+                                                <li key={person.REF_PER} style={{ fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0' }}>
+                                                    <span>{person.APELLIDO1} {person.APELLIDO2}, {person.NOMBRE}</span>
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{person.PERFIL || '-'}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </motion.div>
                 ) : null}
             </AnimatePresence>

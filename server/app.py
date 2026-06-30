@@ -393,7 +393,14 @@ def get_schema():
     tables = ('LISTA_PERSONAL', 'ENCARGOS', 'PERSONAL_PROYECTOS', 'UBICACION')
     
     if db_type == 'postgres':
-        return jsonify({"error": "La introspección de esquema PostgreSQL no está disponible a través de la API Supabase sin funciones adicionales."}), 501
+        schema_name = config.PG_SCHEMA or 'jcf'
+        query = f"""
+            SELECT table_name, column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = '{schema_name}' 
+              AND LOWER(table_name) IN ('lista_personal', 'encargos', 'personal_proyectos', 'ubicacion') 
+            ORDER BY table_name, ordinal_position
+        """
     else:
         query = f"SELECT table_name, column_name FROM user_tab_columns WHERE table_name IN {tables} ORDER BY table_name, column_id"
     
@@ -401,8 +408,8 @@ def get_schema():
     
     schema = {}
     for row in result:
-        table = row['TABLE_NAME']
-        column = row['COLUMN_NAME']
+        table = (row.get('TABLE_NAME') or row.get('table_name')).upper()
+        column = (row.get('COLUMN_NAME') or row.get('column_name')).upper()
         if table not in schema:
             schema[table] = []
         schema[table].append(column)
@@ -628,8 +635,6 @@ def execute_dynamic_query():
         return jsonify({"error": "Only SELECT queries are allowed"}), 403
         
     try:
-        if is_postgres():
-            return jsonify({"error": "Consultas SQL dinámicas no están disponibles para Postgres a través de Supabase. Usa los endpoints fijos."}), 403
         result = execute_query(sql)
         return jsonify(result)
     except Exception as e:

@@ -33,7 +33,7 @@ def get_connection():
         pass
 
     if db_type == 'postgres':
-        raise RuntimeError('Postgres direct DB connection is disabled; use Supabase API instead.')
+        return get_postgres_connection()
     else:
         print(f"DEBUG: Connecting to Oracle at {config.DB_DSN} as user={user}")
         return oracledb.connect(
@@ -41,6 +41,33 @@ def get_connection():
             password=password,
             dsn=config.DB_DSN
         )
+
+def get_postgres_connection():
+    import psycopg2
+    from flask import g
+    password = None
+    try:
+        from flask import has_app_context, has_request_context
+        if (has_app_context() or has_request_context()) and hasattr(g, 'db_password') and g.db_password:
+            password = g.db_password
+    except Exception:
+        pass
+    if not password:
+        password = config.PG_PASSWORD
+
+    user = f"postgres.{config.PG_PROJECT_REF}" if config.PG_PROJECT_REF else "postgres"
+    print(f"DEBUG: Connecting to PostgreSQL at {config.PG_HOST}:{config.PG_PORT} as user={user}")
+    conn = psycopg2.connect(
+        host=config.PG_HOST,
+        port=config.PG_PORT,
+        database=config.PG_DB,
+        user=user,
+        password=password
+    )
+    if config.PG_SCHEMA:
+        with conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {config.PG_SCHEMA};")
+    return conn
 
 def execute_query(query, params=(), is_select=True):
     conn = None
@@ -53,28 +80,44 @@ def execute_query(query, params=(), is_select=True):
         pass
 
     try:
-        if db_type == 'postgres':
-            raise RuntimeError('Postgres direct SQL execution is disabled. Use the Supabase HTTP API helpers in the application routes.')
-
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(query, params)
-        if is_select:
-            columns = [col[0].upper() for col in cursor.description]
-            def row_to_dict(*args):
-                d = {}
-                for col, val in zip(columns, args):
-                    if isinstance(val, (datetime.date, datetime.datetime)):
-                        d[col] = val.isoformat()
-                    else:
-                        d[col] = val
-                return d
-            cursor.rowfactory = row_to_dict
-            result = cursor.fetchall()
-            return result
+        
+        if db_type == 'postgres':
+            cursor.execute(query, params)
+            if is_select:
+                columns = [col[0].upper() for col in cursor.description]
+                result = []
+                for row in cursor.fetchall():
+                    d = {}
+                    for col, val in zip(columns, row):
+                        if isinstance(val, (datetime.date, datetime.datetime)):
+                            d[col] = val.isoformat()
+                        else:
+                            d[col] = val
+                    result.append(d)
+                return result
+            else:
+                conn.commit()
+                return cursor.rowcount
         else:
-            conn.commit()
-            return cursor.rowcount
+            cursor.execute(query, params)
+            if is_select:
+                columns = [col[0].upper() for col in cursor.description]
+                def row_to_dict(*args):
+                    d = {}
+                    for col, val in zip(columns, args):
+                        if isinstance(val, (datetime.date, datetime.datetime)):
+                            d[col] = val.isoformat()
+                        else:
+                            d[col] = val
+                    return d
+                cursor.rowfactory = row_to_dict
+                result = cursor.fetchall()
+                return result
+            else:
+                conn.commit()
+                return cursor.rowcount
     except Exception as e:
         if conn:
             conn.rollback()

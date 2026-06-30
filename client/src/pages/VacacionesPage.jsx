@@ -2655,21 +2655,22 @@ const VacacionesPage = () => {
                                 </p>
                             </div>
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                <div style={{ minWidth: '280px' }}>
+                                <div style={{ minWidth: '320px' }}>
                                     <select
                                         className="form-control"
                                         value={availableProjectFilter}
                                         onChange={(e) => setAvailableProjectFilter(e.target.value)}
                                         style={{ width: '100%', height: '42px', fontSize: '0.9rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-card)' }}
                                     >
-                                        <option value="">Todos los proyectos ({overallAvailablePeople.length} disp.)</option>
+                                        <option value="">Todos los encargos activos ({overallAvailablePeople.length} disp.)</option>
                                         {[...projects]
-                                            .sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''))
+                                            .filter(p => p.FIN_REAL === null || p.FIN_REAL === undefined || p.FIN_REAL === '')
+                                            .sort((a, b) => String(a.CODIGOPR || '').localeCompare(String(b.CODIGOPR || ''), undefined, { numeric: true }))
                                             .map(proj => {
                                                 const count = availableCountByProject[proj.CODIGOPR] || 0;
                                                 return (
                                                     <option key={proj.CODIGOPR} value={proj.CODIGOPR}>
-                                                        {proj.NOMBRE} ({proj.CODIGOPR}) - {count} {count === 1 ? 'disponible' : 'disponibles'}
+                                                        {proj.CODIGOPR} - {proj.NOMBRE} ({count} {count === 1 ? 'disponible' : 'disponibles'})
                                                     </option>
                                                 );
                                             })}

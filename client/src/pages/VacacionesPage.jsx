@@ -16,6 +16,8 @@ const VacacionesPage = () => {
     const [availableTabVacations, setAvailableTabVacations] = useState([]);
     const [availableTabLoading, setAvailableTabLoading] = useState(false);
     const [availableSearchText, setAvailableSearchText] = useState('');
+    const [allAssignments, setAllAssignments] = useState([]);
+    const [availableProjectFilter, setAvailableProjectFilter] = useState('');
 
     // Master data
     const [nationalFestivos, setNationalFestivos] = useState(new Set());
@@ -142,10 +144,14 @@ const VacacionesPage = () => {
     const loadAvailableToday = async () => {
         setAvailableTabLoading(true);
         try {
-            const res = await api.getVacaciones(null, currentYear);
-            setAvailableTabVacations(res.data || []);
+            const [resVacaciones, resAssignments] = await Promise.all([
+                api.getVacaciones(null, currentYear),
+                api.getAssignments()
+            ]);
+            setAvailableTabVacations(resVacaciones.data || []);
+            setAllAssignments(resAssignments.data || []);
         } catch (err) {
-            console.error("Error loading vacations for availability:", err);
+            console.error("Error loading vacations and assignments for availability:", err);
         } finally {
             setAvailableTabLoading(false);
         }
@@ -1171,7 +1177,7 @@ const VacacionesPage = () => {
         return activePersonalList.filter(person => !vacationRefs.has(person.REF_PER));
     }, [activePersonalList, currentYearVacations]);
 
-    const availableByLocation = useMemo(() => {
+    const overallAvailablePeople = useMemo(() => {
         const today = new Date();
         const y = today.getFullYear();
         const m = String(today.getMonth() + 1).padStart(2, '0');
@@ -1189,7 +1195,46 @@ const VacacionesPage = () => {
         });
 
         // Filter active people who are not on vacation today
-        let availablePeople = activePersonalList.filter(p => !peopleOnVacationToday.has(p.REF_PER));
+        return activePersonalList.filter(p => !peopleOnVacationToday.has(p.REF_PER));
+    }, [activePersonalList, availableTabVacations]);
+
+    const projectAssignmentsMap = useMemo(() => {
+        const map = {};
+        allAssignments.forEach(a => {
+            const code = a.CODIGOPR;
+            if (code) {
+                if (!map[code]) map[code] = new Set();
+                map[code].add(a.REF_PER);
+            }
+        });
+        return map;
+    }, [allAssignments]);
+
+    const availableCountByProject = useMemo(() => {
+        const counts = {};
+        projects.forEach(p => {
+            counts[p.CODIGOPR] = 0;
+        });
+
+        overallAvailablePeople.forEach(person => {
+            projects.forEach(proj => {
+                const assignedSet = projectAssignmentsMap[proj.CODIGOPR];
+                if (assignedSet && assignedSet.has(person.REF_PER)) {
+                    counts[proj.CODIGOPR]++;
+                }
+            });
+        });
+        return counts;
+    }, [projects, overallAvailablePeople, projectAssignmentsMap]);
+
+    const availableByLocation = useMemo(() => {
+        let availablePeople = overallAvailablePeople;
+
+        // Filter by project
+        if (availableProjectFilter) {
+            const assignedSet = projectAssignmentsMap[availableProjectFilter];
+            availablePeople = availablePeople.filter(p => assignedSet && assignedSet.has(p.REF_PER));
+        }
 
         // Filter by availableSearchText
         if (availableSearchText) {
@@ -1228,7 +1273,7 @@ const VacacionesPage = () => {
         return Object.values(groups)
             .filter(g => g.people.length > 0)
             .sort((a, b) => String(a.location.A_LUGAR).localeCompare(String(b.location.A_LUGAR)));
-    }, [activePersonalList, availableTabVacations, locations, availableSearchText]);
+    }, [overallAvailablePeople, availableProjectFilter, projectAssignmentsMap, availableSearchText, locations]);
 
     const filteredHistory = loadedVacaciones.filter(item => {
         // Search filter (Employee name, username or file)
@@ -2609,16 +2654,38 @@ const VacacionesPage = () => {
                                     Listado de personal activo hoy (<strong>{new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>) que no tiene vacaciones registradas en el día de hoy.
                                 </p>
                             </div>
-                            <div style={{ position: 'relative', width: '280px' }}>
-                                <Search size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar empleado..."
-                                    className="form-control"
-                                    value={availableSearchText}
-                                    onChange={(e) => setAvailableSearchText(e.target.value)}
-                                    style={{ paddingLeft: '2.5rem', width: '100%' }}
-                                />
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <div style={{ minWidth: '280px' }}>
+                                    <select
+                                        className="form-control"
+                                        value={availableProjectFilter}
+                                        onChange={(e) => setAvailableProjectFilter(e.target.value)}
+                                        style={{ width: '100%', height: '42px', fontSize: '0.9rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-card)' }}
+                                    >
+                                        <option value="">Todos los proyectos ({overallAvailablePeople.length} disp.)</option>
+                                        {[...projects]
+                                            .sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''))
+                                            .map(proj => {
+                                                const count = availableCountByProject[proj.CODIGOPR] || 0;
+                                                return (
+                                                    <option key={proj.CODIGOPR} value={proj.CODIGOPR}>
+                                                        {proj.NOMBRE} ({proj.CODIGOPR}) - {count} {count === 1 ? 'disponible' : 'disponibles'}
+                                                    </option>
+                                                );
+                                            })}
+                                    </select>
+                                </div>
+                                <div style={{ position: 'relative', width: '280px' }}>
+                                    <Search size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar empleado..."
+                                        className="form-control"
+                                        value={availableSearchText}
+                                        onChange={(e) => setAvailableSearchText(e.target.value)}
+                                        style={{ paddingLeft: '2.5rem', width: '100%' }}
+                                    />
+                                </div>
                             </div>
                         </div>
 

@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
-from db import execute_query
+# from db import execute_query  # Oracle/psycopg2 execute_query commented out - using Supabase SDK only
 from supabase_client import (
     select as sb_select,
     insert as sb_insert,
@@ -39,66 +39,66 @@ def login():
     data = request.json
     user = data.get('username')
     password = data.get('password')
-    db_type = data.get('db_type', 'oracle')
-    
+    # db_type is always 'postgres' now - Oracle login removed
+    # db_type = data.get('db_type', 'oracle')
+
     if not user or not password:
         return jsonify({"error": "Usuario y contraseña requeridos"}), 400
 
-    # Para PostgreSQL en producción: validar la contraseña a nivel de aplicación.
-    # PG_PASSWORD es la contraseña maestra del proyecto Supabase (configurada en Render).
-    if db_type == 'postgres':
-        if config.SUPABASE_URL is None or config.SUPABASE_SERVICE_ROLE_KEY is None:
-            return jsonify({"error": "Supabase no está configurado para PostgreSQL"}), 500
+    if config.SUPABASE_URL is None or config.SUPABASE_SERVICE_ROLE_KEY is None:
+        return jsonify({"error": "Supabase no está configurado para PostgreSQL"}), 500
 
-        # 1. Validar que el usuario coincide con PG_SCHEMA
-        expected_user = (config.PG_SCHEMA or '').strip().lower()
-        entered_user = (user or '').strip().lower()
-        if not expected_user or entered_user != expected_user:
-            logging.warning(f"Postgres login fallido: usuario '{user}' no coincide con PG_SCHEMA '{config.PG_SCHEMA}'")
+    # Validar que el usuario coincide con PG_SCHEMA
+    expected_user = (config.PG_SCHEMA or '').strip().lower()
+    entered_user = (user or '').strip().lower()
+    if not expected_user or entered_user != expected_user:
+        logging.warning(f"Login fallido: usuario '{user}' no coincide con PG_SCHEMA '{config.PG_SCHEMA}'")
+        return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
+
+    # Validar contraseña contra PG_PASSWORD
+    if config.PG_PASSWORD:
+        entered = (password or '').strip()
+        expected = config.PG_PASSWORD.strip()
+        logging.info(f"Login: PG_PASSWORD configurado, validando contraseña para user={user}")
+        if entered != expected:
+            logging.warning(f"Login fallido para {user}: contraseña no coincide con PG_PASSWORD")
             return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
-        # 2. Validar contraseña contra PG_PASSWORD
-        if config.PG_PASSWORD:
-            entered = (password or '').strip()
-            expected = config.PG_PASSWORD.strip()
-            logging.info(f"Postgres login: PG_PASSWORD configurado, validando contraseña para user={user}")
-            if entered != expected:
-                logging.warning(f"Postgres login fallido para {user}: contraseña no coincide con PG_PASSWORD")
-                return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
+    logging.info(f"Login successful for user={user} using Supabase API")
+    g.db_user = user
+    g.db_password = password
+    g.db_type = 'postgres'
+    return jsonify({"status": "success", "user": user, "db_type": "postgres"})
 
-        logging.info(f"Login successful for user={user} on db_type={db_type} using Supabase API")
-        g.db_user = user
-        g.db_password = password
-        g.db_type = db_type
-        return jsonify({"status": "success", "user": user, "db_type": db_type})
-
-    # Verify credentials by trying to connect
-    try:
-        g.db_user = user
-        g.db_password = password
-        g.db_type = db_type
-        logging.info(f"Attempting login for user={user} on db_type={db_type}")
-        # Simple query to test connection
-        test_query = "SELECT 1 FROM DUAL"
-        execute_query(test_query)
-        logging.info(f"Login successful for {user}")
-        return jsonify({"status": "success", "user": user, "db_type": db_type})
-    except Exception as e:
-        logging.error(f"Login failed for {user} on {db_type}: {str(e)}")
-        return jsonify({"error": f"Error de conexión a la base de datos: {str(e)}"}), 401
+    # ============================================================
+    # ORACLE LOGIN - COMMENTED OUT (not in use)
+    # ============================================================
+    # try:
+    #     g.db_user = user
+    #     g.db_password = password
+    #     g.db_type = db_type
+    #     logging.info(f"Attempting login for user={user} on db_type={db_type}")
+    #     test_query = "SELECT 1 FROM DUAL"
+    #     execute_query(test_query)
+    #     logging.info(f"Login successful for {user}")
+    #     return jsonify({"status": "success", "user": user, "db_type": db_type})
+    # except Exception as e:
+    #     logging.error(f"Login failed for {user} on {db_type}: {str(e)}")
+    #     return jsonify({"error": f"Error de conexión a la base de datos: {str(e)}"}), 401
 
 @app.before_request
 def before_request_func():
     from flask import g
     g.db_user = request.headers.get('X-DB-User')
     g.db_password = request.headers.get('X-DB-Password')
-    # Si Supabase está configurado, forzamos PostgreSQL; de lo contrario usamos X‑DB‑Type (default oracle)
-    g.db_type = 'postgres' if config.SUPABASE_URL else request.headers.get('X-DB-Type', 'oracle')
-    logging.debug(f"[DB] Determined db_type: {g.db_type}")
+    # Always PostgreSQL/Supabase - Oracle removed
+    g.db_type = 'postgres'
+    logging.debug(f"[DB] db_type: postgres (Supabase)")
 
 
+# is_postgres() kept for compatibility but always returns True
 def is_postgres():
-    return getattr(g, 'db_type', 'oracle') == 'postgres'
+    return True
 
 
 @app.route('/api/debug/pg', methods=['GET'])
@@ -182,40 +182,26 @@ def debug_connection():
 @app.route('/api/encargos', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_encargos():
     if request.method == 'GET':
-        if is_postgres():
-            result = sb_select('ENCARGOS')
-        else:
-            result = execute_query("SELECT * FROM ENCARGOS")
+        result = sb_select('ENCARGOS')
+        # Oracle: result = execute_query("SELECT * FROM ENCARGOS")
         return jsonify(result)
-    
+
     elif request.method == 'POST':
         data = request.json
-        if is_postgres():
-            sb_insert('ENCARGOS', data)
-        else:
-            query = """INSERT INTO ENCARGOS (CODIGOPR, NOMBRE, AREA, INICIO, FIN, CLIENTE, FIN_REAL, PRESUPUESTO, DESCRIPCION, INFOR) 
-                       VALUES (:CODIGOPR, :NOMBRE, :AREA, TO_DATE(:INICIO, 'YYYY-MM-DD'), TO_DATE(:FIN, 'YYYY-MM-DD'), :CLIENTE, TO_DATE(:FIN_REAL, 'YYYY-MM-DD'), :PRESUPUESTO, :DESCRIPCION, :INFOR)"""
-            execute_query(query, data, is_select=False)
+        sb_insert('ENCARGOS', data)
+        # Oracle: execute_query("INSERT INTO ENCARGOS (...) VALUES (...)", data, is_select=False)
         return jsonify({"status": "success"}), 201
 
     elif request.method == 'PUT':
         data = request.json
-        if is_postgres():
-            sb_update('ENCARGOS', data, {'CODIGOPR': data.get('CODIGOPR')})
-        else:
-            query = """UPDATE ENCARGOS SET NOMBRE=:NOMBRE, AREA=:AREA, INICIO=TO_DATE(:INICIO, 'YYYY-MM-DD'), FIN=TO_DATE(:FIN, 'YYYY-MM-DD'), 
-                       CLIENTE=:CLIENTE, FIN_REAL=TO_DATE(:FIN_REAL, 'YYYY-MM-DD'), PRESUPUESTO=:PRESUPUESTO, DESCRIPCION=:DESCRIPCION, INFOR=:INFOR 
-                       WHERE CODIGOPR=:CODIGOPR"""
-            execute_query(query, data, is_select=False)
+        sb_update('ENCARGOS', data, {'CODIGOPR': data.get('CODIGOPR')})
+        # Oracle: execute_query("UPDATE ENCARGOS SET ... WHERE CODIGOPR=:CODIGOPR", data, is_select=False)
         return jsonify({"status": "success"})
 
     elif request.method == 'DELETE':
         codigopr = request.args.get('codigopr')
-        if is_postgres():
-            sb_delete('ENCARGOS', {'CODIGOPR': codigopr})
-        else:
-            query = "DELETE FROM ENCARGOS WHERE CODIGOPR=:codigopr"
-            execute_query(query, {"codigopr": codigopr}, is_select=False)
+        sb_delete('ENCARGOS', {'CODIGOPR': codigopr})
+        # Oracle: execute_query("DELETE FROM ENCARGOS WHERE CODIGOPR=:codigopr", {"codigopr": codigopr}, is_select=False)
         return jsonify({"status": "success"})
 
 @app.route('/api/personal/bulk-location', methods=['POST'])
@@ -228,14 +214,9 @@ def bulk_update_personal_location():
         return jsonify({"error": "Se requieren IDs de personal y la nueva ubicación"}), 400
 
     try:
-        # Update each person one by one to keep it simple and avoid complex IN clause generation
         for ref_per in ref_pers:
-            if is_postgres():
-                sb_update('LISTA_PERSONAL', {'REF_UBI': new_location}, {'REF_PER': ref_per})
-            else:
-                query = "UPDATE LISTA_PERSONAL SET REF_UBI=:new_location WHERE REF_PER=:ref_per"
-                execute_query(query, {"new_location": new_location, "ref_per": ref_per}, is_select=False)
-        
+            sb_update('LISTA_PERSONAL', {'REF_UBI': new_location}, {'REF_PER': ref_per})
+            # Oracle: execute_query("UPDATE LISTA_PERSONAL SET REF_UBI=:new_location WHERE REF_PER=:ref_per", ..., is_select=False)
         return jsonify({"status": "success", "message": f"Ubicación actualizada para {len(ref_pers)} personas"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -243,41 +224,26 @@ def bulk_update_personal_location():
 @app.route('/api/personal', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_personal():
     if request.method == 'GET':
-        if is_postgres():
-            result = sb_select('LISTA_PERSONAL')
-        else:
-            result = execute_query("SELECT * FROM LISTA_PERSONAL")
+        result = sb_select('LISTA_PERSONAL')
+        # Oracle: result = execute_query("SELECT * FROM LISTA_PERSONAL")
         return jsonify(result)
-    
+
     elif request.method == 'POST':
         data = request.json
-        if is_postgres():
-            sb_insert('LISTA_PERSONAL', data)
-        else:
-            query = """INSERT INTO LISTA_PERSONAL (NOMBRE, APELLIDO1, APELLIDO2, PERFIL, BAJA, USUARIO, TELEFONO_1, TELEFONO_2, ACTIVO, RESP, NIF, PLANTILLA, REF_PER, REF_UBI, SITUACION, INCORPORACION, N_FICHA, F_CONTRATO, REF_TIT, IDEMPLEADO) 
-                       VALUES (:NOMBRE, :APELLIDO1, :APELLIDO2, :PERFIL, TO_DATE(:BAJA, 'YYYY-MM-DD'), :USUARIO, :TELEFONO_1, :TELEFONO_2, :ACTIVO, :RESP, :NIF, :PLANTILLA, :REF_PER, :REF_UBI, :SITUACION, TO_DATE(:INCORPORACION, 'YYYY-MM-DD'), :N_FICHA, TO_DATE(:F_CONTRATO, 'YYYY-MM-DD'), :REF_TIT, :IDEMPLEADO)"""
-            execute_query(query, data, is_select=False)
+        sb_insert('LISTA_PERSONAL', data)
+        # Oracle: execute_query("INSERT INTO LISTA_PERSONAL (...) VALUES (...)", data, is_select=False)
         return jsonify({"status": "success"}), 201
 
     elif request.method == 'PUT':
         data = request.json
-        if is_postgres():
-            sb_update('LISTA_PERSONAL', data, {'REF_PER': data.get('REF_PER')})
-        else:
-            query = """UPDATE LISTA_PERSONAL SET NOMBRE=:NOMBRE, APELLIDO1=:APELLIDO1, APELLIDO2=:APELLIDO2, PERFIL=:PERFIL, BAJA=TO_DATE(:BAJA, 'YYYY-MM-DD'), 
-                       USUARIO=:USUARIO, TELEFONO_1=:TELEFONO_1, TELEFONO_2=:TELEFONO_2, ACTIVO=:ACTIVO, RESP=:RESP, NIF=:NIF, PLANTILLA=:PLANTILLA, 
-                       REF_UBI=:REF_UBI, SITUACION=:SITUACION, INCORPORACION=TO_DATE(:INCORPORACION, 'YYYY-MM-DD'), N_FICHA=:N_FICHA, F_CONTRATO=TO_DATE(:F_CONTRATO, 'YYYY-MM-DD'), REF_TIT=:REF_TIT, IDEMPLEADO=:IDEMPLEADO 
-                       WHERE REF_PER=:REF_PER"""
-            execute_query(query, data, is_select=False)
+        sb_update('LISTA_PERSONAL', data, {'REF_PER': data.get('REF_PER')})
+        # Oracle: execute_query("UPDATE LISTA_PERSONAL SET ... WHERE REF_PER=:REF_PER", data, is_select=False)
         return jsonify({"status": "success"})
 
     elif request.method == 'DELETE':
         ref_per = request.args.get('ref_per')
-        if is_postgres():
-            sb_delete('LISTA_PERSONAL', {'REF_PER': ref_per})
-        else:
-            query = "DELETE FROM LISTA_PERSONAL WHERE REF_PER=:ref_per"
-            execute_query(query, {"ref_per": ref_per}, is_select=False)
+        sb_delete('LISTA_PERSONAL', {'REF_PER': ref_per})
+        # Oracle: execute_query("DELETE FROM LISTA_PERSONAL WHERE REF_PER=:ref_per", {"ref_per": ref_per}, is_select=False)
         return jsonify({"status": "success"})
 
 @app.route('/api/personal-proyectos', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -285,127 +251,94 @@ def manage_personal_proyectos():
     codigopr = request.args.get('codigopr')
     
     if request.method == 'GET':
-        if is_postgres():
-            if codigopr:
-                assignments = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
-            else:
-                assignments = sb_select('PERSONAL_PROYECTOS')
-            
-            try:
-                personal_rows = sb_select('LISTA_PERSONAL')
-                personal_map = {str(p.get('REF_PER')): p for p in personal_rows}
-                result = []
-                for a in assignments:
-                    row = {**a}
-                    person = personal_map.get(str(a.get('REF_PER')))
-                    if person:
-                        row['NOMBRE'] = person.get('NOMBRE')
-                        row['APELLIDO1'] = person.get('APELLIDO1')
-                        row['APELLIDO2'] = person.get('APELLIDO2')
-                        row['PERFIL'] = person.get('PERFIL')
-                    result.append(row)
-            except Exception as e:
-                logging.error(f"[PERSONAL_PROYECTOS] Error joining LISTA_PERSONAL: {str(e)}")
-                result = assignments
+        if codigopr:
+            assignments = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
         else:
-            if codigopr:
-                query = """SELECT pp.*, p.NOMBRE, p.APELLIDO1, p.APELLIDO2, p.PERFIL 
-                           FROM PERSONAL_PROYECTOS pp
-                           JOIN LISTA_PERSONAL p ON pp.REF_PER = p.REF_PER
-                           WHERE pp.CODIGOPR = :codigopr"""
-                result = execute_query(query, {"codigopr": codigopr})
-            else:
-                result = execute_query("SELECT * FROM PERSONAL_PROYECTOS")
+            assignments = sb_select('PERSONAL_PROYECTOS')
+        # Oracle path removed:
+        # query = "SELECT pp.*, p.NOMBRE... FROM PERSONAL_PROYECTOS pp JOIN LISTA_PERSONAL p ... WHERE pp.CODIGOPR = :codigopr"
+        try:
+            personal_rows = sb_select('LISTA_PERSONAL')
+            personal_map = {str(p.get('REF_PER')): p for p in personal_rows}
+            result = []
+            for a in assignments:
+                row = {**a}
+                person = personal_map.get(str(a.get('REF_PER')))
+                if person:
+                    row['NOMBRE'] = person.get('NOMBRE')
+                    row['APELLIDO1'] = person.get('APELLIDO1')
+                    row['APELLIDO2'] = person.get('APELLIDO2')
+                    row['PERFIL'] = person.get('PERFIL')
+                result.append(row)
+        except Exception as e:
+            logging.error(f"[PERSONAL_PROYECTOS] Error joining LISTA_PERSONAL: {str(e)}")
+            result = assignments
         return jsonify(result)
-    
+
     elif request.method == 'POST':
         data = request.json
-        if is_postgres():
-            sb_insert('PERSONAL_PROYECTOS', data)
-        else:
-            query = """INSERT INTO PERSONAL_PROYECTOS (REF_PER, CODIGOPR, ALTA, BAJA, PORCENTAJE, RTP) 
-                       VALUES (:REF_PER, :CODIGOPR, TO_DATE(:ALTA, 'YYYY-MM-DD'), TO_DATE(:BAJA, 'YYYY-MM-DD'), :PORCENTAJE, :RTP)"""
-            execute_query(query, data, is_select=False)
+        sb_insert('PERSONAL_PROYECTOS', data)
+        # Oracle: execute_query("INSERT INTO PERSONAL_PROYECTOS (...) VALUES (...)", data, is_select=False)
         return jsonify({"status": "success"}), 201
 
     elif request.method == 'PUT':
         data = request.json
-        if is_postgres():
-            sb_update('PERSONAL_PROYECTOS', data, {'REF_PER': data.get('REF_PER'), 'CODIGOPR': data.get('CODIGOPR')})
-        else:
-            query = """UPDATE PERSONAL_PROYECTOS SET ALTA=TO_DATE(:ALTA, 'YYYY-MM-DD'), BAJA=TO_DATE(:BAJA, 'YYYY-MM-DD'), PORCENTAJE=:PORCENTAJE, RTP=:RTP 
-                       WHERE REF_PER=:REF_PER AND CODIGOPR=:CODIGOPR"""
-            execute_query(query, data, is_select=False)
+        sb_update('PERSONAL_PROYECTOS', data, {'REF_PER': data.get('REF_PER'), 'CODIGOPR': data.get('CODIGOPR')})
+        # Oracle: execute_query("UPDATE PERSONAL_PROYECTOS SET ... WHERE REF_PER=:REF_PER AND CODIGOPR=:CODIGOPR", data, is_select=False)
         return jsonify({"status": "success"})
 
     elif request.method == 'DELETE':
         ref_per = request.args.get('ref_per')
         codigopr = request.args.get('codigopr')
-        if is_postgres():
-            sb_delete('PERSONAL_PROYECTOS', {'REF_PER': ref_per, 'CODIGOPR': codigopr})
-        else:
-            query = "DELETE FROM PERSONAL_PROYECTOS WHERE REF_PER=:ref_per AND CODIGOPR=:codigopr"
-            execute_query(query, {"ref_per": ref_per, "codigopr": codigopr}, is_select=False)
+        sb_delete('PERSONAL_PROYECTOS', {'REF_PER': ref_per, 'CODIGOPR': codigopr})
+        # Oracle: execute_query("DELETE FROM PERSONAL_PROYECTOS WHERE REF_PER=:ref_per AND CODIGOPR=:codigopr", ..., is_select=False)
         return jsonify({"status": "success"})
 
 @app.route('/api/ubicacion', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_ubicacion():
     if request.method == 'GET':
-        if is_postgres():
-            result = sb_select('UBICACION', order='REF_UBI')
-        else:
-            result = execute_query("SELECT * FROM UBICACION ORDER BY REF_UBI")
+        result = sb_select('UBICACION', order='REF_UBI')
+        # Oracle: result = execute_query("SELECT * FROM UBICACION ORDER BY REF_UBI")
         return jsonify(result)
-    
+
     elif request.method == 'POST':
         data = request.json
-        if is_postgres():
-            sb_insert('UBICACION', data)
-        else:
-            query = "INSERT INTO UBICACION (REF_UBI, A_LUGAR) VALUES (:REF_UBI, :A_LUGAR)"
-            execute_query(query, data, is_select=False)
+        sb_insert('UBICACION', data)
+        # Oracle: execute_query("INSERT INTO UBICACION (REF_UBI, A_LUGAR) VALUES (:REF_UBI, :A_LUGAR)", data, is_select=False)
         return jsonify({"status": "success"}), 201
 
     elif request.method == 'PUT':
         data = request.json
-        if is_postgres():
-            sb_update('UBICACION', data, {'REF_UBI': data.get('REF_UBI')})
-        else:
-            query = "UPDATE UBICACION SET A_LUGAR=:A_LUGAR WHERE REF_UBI=:REF_UBI"
-            execute_query(query, data, is_select=False)
+        sb_update('UBICACION', data, {'REF_UBI': data.get('REF_UBI')})
+        # Oracle: execute_query("UPDATE UBICACION SET A_LUGAR=:A_LUGAR WHERE REF_UBI=:REF_UBI", data, is_select=False)
         return jsonify({"status": "success"})
 
     elif request.method == 'DELETE':
         ref_ubi = request.args.get('ref_ubi')
-        if is_postgres():
-            sb_delete('UBICACION', {'REF_UBI': ref_ubi})
-        else:
-            query = "DELETE FROM UBICACION WHERE REF_UBI=:ref_ubi"
-            execute_query(query, {"ref_ubi": ref_ubi}, is_select=False)
+        sb_delete('UBICACION', {'REF_UBI': ref_ubi})
+        # Oracle: execute_query("DELETE FROM UBICACION WHERE REF_UBI=:ref_ubi", {"ref_ubi": ref_ubi}, is_select=False)
         return jsonify({"status": "success"})
 
 @app.route('/api/schema', methods=['GET'])
 def get_schema():
-    from flask import g
-    db_type = getattr(g, 'db_type', 'oracle')
-    
-    # Only include relevant tables
-    tables = ('LISTA_PERSONAL', 'ENCARGOS', 'PERSONAL_PROYECTOS', 'UBICACION')
-    
-    if db_type == 'postgres':
-        schema_name = config.PG_SCHEMA or 'jcf'
-        query = f"""
-            SELECT table_name, column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = '{schema_name}' 
-              AND LOWER(table_name) IN ('lista_personal', 'encargos', 'personal_proyectos', 'ubicacion') 
-            ORDER BY table_name, ordinal_position
-        """
-    else:
-        query = f"SELECT table_name, column_name FROM user_tab_columns WHERE table_name IN {tables} ORDER BY table_name, column_id"
-    
-    result = execute_query(query)
-    
+    # Oracle path removed - always PostgreSQL/Supabase
+    # Oracle query was: SELECT table_name, column_name FROM user_tab_columns WHERE table_name IN (...) ...
+    schema_name = config.PG_SCHEMA or 'jcf'
+    from supabase_client import supabase, SCHEMA
+    try:
+        resp = supabase.schema(SCHEMA).rpc('get_schema_columns', {}).execute()
+    except Exception:
+        pass
+    # Fallback: build schema from information_schema via psycopg2
+    from db import execute_query as pg_query
+    query = f"""
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = '{schema_name}'
+          AND LOWER(table_name) IN ('lista_personal', 'encargos', 'personal_proyectos', 'ubicacion')
+        ORDER BY table_name, ordinal_position
+    """
+    result = pg_query(query)
     schema = {}
     for row in result:
         table = (row.get('TABLE_NAME') or row.get('table_name')).upper()
@@ -413,7 +346,6 @@ def get_schema():
         if table not in schema:
             schema[table] = []
         schema[table].append(column)
-    
     return jsonify(schema)
 
 def parse_iso_date(val):
@@ -492,24 +424,16 @@ def backup_import():
         # 3. ENCARGOS
         if 'ENCARGOS' in backup_data and backup_data['ENCARGOS']:
             try:
-                if is_postgres():
-                    rows = []
-                    for row in backup_data['ENCARGOS']:
-                        clean_row = {**row}
-                        for f in ['INICIO', 'FIN', 'FIN_REAL']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                            if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
-                                clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
-                        rows.append(clean_row)
-                    sb_insert('ENCARGOS', rows)
-                else:
-                    for row in backup_data['ENCARGOS']:
-                        clean_row = {**row}
-                        for f in ['INICIO', 'FIN', 'FIN_REAL']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                        execute_query("""INSERT INTO ENCARGOS (CODIGOPR, NOMBRE, AREA, INICIO, FIN, CLIENTE, FIN_REAL, PRESUPUESTO, DESCRIPCION, INFOR) 
-                                       VALUES (:CODIGOPR, :NOMBRE, :AREA, :INICIO, :FIN, :CLIENTE, :FIN_REAL, :PRESUPUESTO, :DESCRIPCION, :INFOR)""", 
-                                      clean_row, is_select=False)
+                rows = []
+                for row in backup_data['ENCARGOS']:
+                    clean_row = {**row}
+                    for f in ['INICIO', 'FIN', 'FIN_REAL']:
+                        clean_row[f] = parse_iso_date(clean_row.get(f))
+                        if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
+                            clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
+                    rows.append(clean_row)
+                sb_insert('ENCARGOS', rows)
+                # Oracle: execute_query("INSERT INTO ENCARGOS ...", clean_row, is_select=False)
                 inserted_counts['ENCARGOS'] = len(backup_data['ENCARGOS'])
             except Exception as e:
                 logging.warning(f"No se pudo importar ENCARGOS: {str(e)}")
@@ -517,24 +441,16 @@ def backup_import():
         # 4. LISTA_PERSONAL
         if 'LISTA_PERSONAL' in backup_data and backup_data['LISTA_PERSONAL']:
             try:
-                if is_postgres():
-                    rows = []
-                    for row in backup_data['LISTA_PERSONAL']:
-                        clean_row = {**row}
-                        for f in ['BAJA', 'INCORPORACION', 'F_CONTRATO']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                            if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
-                                clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
-                        rows.append(clean_row)
-                    sb_insert('LISTA_PERSONAL', rows)
-                else:
-                    for row in backup_data['LISTA_PERSONAL']:
-                        clean_row = {**row}
-                        for f in ['BAJA', 'INCORPORACION', 'F_CONTRATO']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                        execute_query("""INSERT INTO LISTA_PERSONAL (NOMBRE, APELLIDO1, APELLIDO2, PERFIL, BAJA, USUARIO, TELEFONO_1, TELEFONO_2, ACTIVO, RESP, NIF, PLANTILLA, REF_PER, REF_UBI, SITUACION, INCORPORACION, N_FICHA, F_CONTRATO, REF_TIT, IDEMPLEADO) 
-                                       VALUES (:NOMBRE, :APELLIDO1, :APELLIDO2, :PERFIL, :BAJA, :USUARIO, :TELEFONO_1, :TELEFONO_2, :ACTIVO, :RESP, :NIF, :PLANTILLA, :REF_PER, :REF_UBI, :SITUACION, :INCORPORACION, :N_FICHA, :F_CONTRATO, :REF_TIT, :IDEMPLEADO)""", 
-                                      clean_row, is_select=False)
+                rows = []
+                for row in backup_data['LISTA_PERSONAL']:
+                    clean_row = {**row}
+                    for f in ['BAJA', 'INCORPORACION', 'F_CONTRATO']:
+                        clean_row[f] = parse_iso_date(clean_row.get(f))
+                        if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
+                            clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
+                    rows.append(clean_row)
+                sb_insert('LISTA_PERSONAL', rows)
+                # Oracle: execute_query("INSERT INTO LISTA_PERSONAL ...", clean_row, is_select=False)
                 inserted_counts['LISTA_PERSONAL'] = len(backup_data['LISTA_PERSONAL'])
             except Exception as e:
                 logging.warning(f"No se pudo importar LISTA_PERSONAL: {str(e)}")
@@ -542,24 +458,16 @@ def backup_import():
         # 5. PERSONAL_PROYECTOS
         if 'PERSONAL_PROYECTOS' in backup_data and backup_data['PERSONAL_PROYECTOS']:
             try:
-                if is_postgres():
-                    rows = []
-                    for row in backup_data['PERSONAL_PROYECTOS']:
-                        clean_row = {**row}
-                        for f in ['ALTA', 'BAJA']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                            if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
-                                clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
-                        rows.append(clean_row)
-                    sb_insert('PERSONAL_PROYECTOS', rows)
-                else:
-                    for row in backup_data['PERSONAL_PROYECTOS']:
-                        clean_row = {**row}
-                        for f in ['ALTA', 'BAJA']:
-                            clean_row[f] = parse_iso_date(clean_row.get(f))
-                        execute_query("""INSERT INTO PERSONAL_PROYECTOS (REF_PER, CODIGOPR, ALTA, BAJA, PORCENTAJE, RTP) 
-                                       VALUES (:REF_PER, :CODIGOPR, :ALTA, :BAJA, :PORCENTAJE, :RTP)""", 
-                                      clean_row, is_select=False)
+                rows = []
+                for row in backup_data['PERSONAL_PROYECTOS']:
+                    clean_row = {**row}
+                    for f in ['ALTA', 'BAJA']:
+                        clean_row[f] = parse_iso_date(clean_row.get(f))
+                        if isinstance(clean_row[f], (datetime.datetime, datetime.date)):
+                            clean_row[f] = clean_row[f].strftime('%Y-%m-%d')
+                    rows.append(clean_row)
+                sb_insert('PERSONAL_PROYECTOS', rows)
+                # Oracle: execute_query("INSERT INTO PERSONAL_PROYECTOS ...", clean_row, is_select=False)
                 inserted_counts['PERSONAL_PROYECTOS'] = len(backup_data['PERSONAL_PROYECTOS'])
             except Exception as e:
                 logging.warning(f"No se pudo importar PERSONAL_PROYECTOS: {str(e)}")
@@ -577,13 +485,8 @@ def backup_import():
                     if isinstance(clean_row['FECHA_HASTA'], (datetime.datetime, datetime.date)):
                         clean_row['FECHA_HASTA'] = clean_row['FECHA_HASTA'].strftime('%Y-%m-%d')
                     rows.append(clean_row)
-                if is_postgres():
-                    sb_insert('VACACIONES', rows)
-                else:
-                    for row in rows:
-                        execute_query("""INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
-                                       VALUES (SEQ_VACACIONES.NEXTVAL, :REF_PER, :DURACION, TO_DATE(:FECHA_DESDE, 'YYYY-MM-DD'), TO_DATE(:FECHA_HASTA, 'YYYY-MM-DD'), :PARTICION_NUM, :ORIGEN_FICHERO, SYSDATE)""",
-                                      row, is_select=False)
+                sb_insert('VACACIONES', rows)
+                # Oracle: execute_query("INSERT INTO VACACIONES ...", row, is_select=False)
                 inserted_counts['VACACIONES'] = len(backup_data['VACACIONES'])
             except Exception as e:
                 logging.warning(f"No se pudo importar VACACIONES: {str(e)}")
@@ -605,11 +508,8 @@ def backup_import():
                         'FECHA': fecha_str,
                         'DESCRIPCION': clean_row.get('DESCRIPCION') or clean_row.get('descripcion')
                     })
-                if is_postgres():
-                    sb_insert('FESTIVOS', rows)
-                else:
-                    for row in rows:
-                        execute_query("INSERT INTO FESTIVOS (ID_FESTIVO, YEAR, REF_UBI, FECHA, DESCRIPCION) VALUES (SEQ_FESTIVOS.NEXTVAL, :YEAR, :REF_UBI, TO_DATE(:FECHA, 'YYYY-MM-DD'), :DESCRIPCION)", row, is_select=False)
+                sb_insert('FESTIVOS', rows)
+                # Oracle: execute_query("INSERT INTO FESTIVOS ...", row, is_select=False)
                 inserted_counts['FESTIVOS'] = len(backup_data['FESTIVOS'])
             except Exception as e:
                 logging.warning(f"No se pudo importar FESTIVOS: {str(e)}")
@@ -641,35 +541,17 @@ def execute_dynamic_query():
         return jsonify({"error": str(e)}), 400
 
 def check_and_create_vacaciones_table():
-    from flask import g
-    db_type = getattr(g, 'db_type', 'oracle')
-    if db_type == 'postgres':
-        # Supabase debe tener la tabla VACACIONES creada previamente.
-        # No se puede crear dinámicamente por SQL directo desde la API REST.
-        return
-    try:
-        # Oracle: verify and create as needed
-        check_query = "SELECT 1 FROM VACACIONES WHERE ROWNUM = 1"
-        execute_query(check_query)
-    except Exception:
-        logging.info("Creating VACACIONES table and sequence for Oracle...")
-        try:
-            execute_query("CREATE SEQUENCE SEQ_VACACIONES START WITH 1 INCREMENT BY 1", is_select=False)
-        except Exception as seq_err:
-            logging.warning(f"Sequence SEQ_VACACIONES creation skipped: {seq_err}")
-        create_sql = """
-            CREATE TABLE VACACIONES (
-                ID_VACACION NUMBER PRIMARY KEY,
-                REF_PER NUMBER NOT NULL,
-                DURACION NUMBER(5,1),
-                FECHA_DESDE DATE NOT NULL,
-                FECHA_HASTA DATE NOT NULL,
-                PARTICION_NUM NUMBER,
-                ORIGEN_FICHERO VARCHAR2(255),
-                FECHA_CARGA TIMESTAMP
-            )
-        """
-        execute_query(create_sql, is_select=False)
+    # Only postgres now, no need to create dynamically
+    return
+    # ============================================================
+    # ORACLE TABLE CREATION - COMMENTED OUT (not in use)
+    # ============================================================
+    # try:
+    #     check_query = "SELECT 1 FROM VACACIONES WHERE ROWNUM = 1"
+    #     execute_query(check_query)
+    # except Exception:
+    #     logging.info("Creating VACACIONES table and sequence for Oracle...")
+    #     ...
 
 
 def check_and_create_festivos_table():
@@ -714,87 +596,47 @@ def get_vacaciones():
     
     logging.debug(f"[VACACIONES] Request args: ref_per={ref_per}, year={year}, origen_fichero={origen_fichero}, codigopr={codigopr}")
 
-    if is_postgres():
-        try:
-            vacations = sb_select('VACACIONES')
-            logging.debug(f"[VACACIONES] rows retrieved: {len(vacations)}")
-            if ref_per:
-                vacations = [row for row in vacations if str(row.get('REF_PER')) == str(ref_per)]
-            if year:
-                vacations = [row for row in vacations if row.get('FECHA_DESDE') and str(row.get('FECHA_DESDE')).startswith(str(year))]
-            if origen_fichero:
-                vacations = [row for row in vacations if str(row.get('ORIGEN_FICHERO')) == str(origen_fichero)]
-            if codigopr:
-                proyectos = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
-                ref_pers = {str(row.get('REF_PER')) for row in proyectos}
-                vacations = [row for row in vacations if str(row.get('REF_PER')) in ref_pers]
-
-            personal_rows = sb_select('LISTA_PERSONAL')
-            personal_map = {str(person.get('REF_PER')): person for person in personal_rows}
-
-            result = []
-            for vac in vacations:
-                row = {**vac}
-                person = personal_map.get(str(vac.get('REF_PER')))
-                if person:
-                    row['NOMBRE'] = person.get('NOMBRE')
-                    row['APELLIDO1'] = person.get('APELLIDO1')
-                    row['APELLIDO2'] = person.get('APELLIDO2')
-                    row['PERFIL'] = person.get('PERFIL')
-                    row['USUARIO'] = person.get('USUARIO')
-                result.append(row)
-            return jsonify(result)
-        except Exception as e:
-            import traceback
-            logging.error(f"[VACACIONES] ERROR: {str(e)}\n{traceback.format_exc()}")
-            return jsonify({"error": str(e)}), 500
-
-    query = """
-        SELECT v.ID_VACACION, v.REF_PER, v.DURACION, v.FECHA_DESDE, v.FECHA_HASTA, 
-               v.PARTICION_NUM, v.ORIGEN_FICHERO, v.FECHA_CARGA,
-               p.NOMBRE, p.APELLIDO1, p.APELLIDO2, p.PERFIL, p.USUARIO
-        FROM VACACIONES v
-        JOIN LISTA_PERSONAL p ON v.REF_PER = p.REF_PER
-    """
-    params = {}
-    where_clauses = []
-    
-    if ref_per:
-        where_clauses.append("v.REF_PER = :ref_per")
-        params["ref_per"] = int(ref_per)
-        
-    if year:
-        where_clauses.append("EXTRACT(YEAR FROM v.FECHA_DESDE) = :year")
-        params["year"] = int(year)
-        
-    if origen_fichero:
-        where_clauses.append("v.ORIGEN_FICHERO = :origen_fichero")
-        params["origen_fichero"] = origen_fichero
-
-    if codigopr:
-        where_clauses.append("EXISTS (SELECT 1 FROM PERSONAL_PROYECTOS pp WHERE pp.REF_PER = v.REF_PER AND pp.CODIGOPR = :codigopr)")
-        params["codigopr"] = codigopr
-        
-    if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-        
-    query += " ORDER BY v.FECHA_CARGA DESC, v.FECHA_DESDE DESC"
-    
     try:
-        result = execute_query(query, params)
+        vacations = sb_select('VACACIONES')
+        logging.debug(f"[VACACIONES] rows retrieved: {len(vacations)}")
+        if ref_per:
+            vacations = [row for row in vacations if str(row.get('REF_PER')) == str(ref_per)]
+        if year:
+            vacations = [row for row in vacations if row.get('FECHA_DESDE') and str(row.get('FECHA_DESDE')).startswith(str(year))]
+        if origen_fichero:
+            vacations = [row for row in vacations if str(row.get('ORIGEN_FICHERO')) == str(origen_fichero)]
+        if codigopr:
+            proyectos = sb_select('PERSONAL_PROYECTOS', {'CODIGOPR': codigopr})
+            ref_pers = {str(row.get('REF_PER')) for row in proyectos}
+            vacations = [row for row in vacations if str(row.get('REF_PER')) in ref_pers]
+
+        personal_rows = sb_select('LISTA_PERSONAL')
+        personal_map = {str(person.get('REF_PER')): person for person in personal_rows}
+
+        result = []
+        for vac in vacations:
+            row = {**vac}
+            person = personal_map.get(str(vac.get('REF_PER')))
+            if person:
+                row['NOMBRE'] = person.get('NOMBRE')
+                row['APELLIDO1'] = person.get('APELLIDO1')
+                row['APELLIDO2'] = person.get('APELLIDO2')
+                row['PERFIL'] = person.get('PERFIL')
+                row['USUARIO'] = person.get('USUARIO')
+            result.append(row)
         return jsonify(result)
     except Exception as e:
+        import traceback
+        logging.error(f"[VACACIONES] ERROR: {str(e)}\n{traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/vacaciones/ficheros', methods=['GET'])
 def get_vacaciones_ficheros():
     check_and_create_vacaciones_table()
     try:
-        if is_postgres():
-            return jsonify(sb_select_distinct('VACACIONES', 'ORIGEN_FICHERO'))
-        query = "SELECT DISTINCT ORIGEN_FICHERO FROM VACACIONES WHERE ORIGEN_FICHERO IS NOT NULL ORDER BY ORIGEN_FICHERO"
-        result = execute_query(query)
-        return jsonify(result)
+        return jsonify(sb_select_distinct('VACACIONES', 'ORIGEN_FICHERO'))
+        # Oracle: result = execute_query("SELECT DISTINCT ORIGEN_FICHERO FROM VACACIONES ...")
+        # return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -807,54 +649,26 @@ def import_vacaciones():
         
     inserted_count = 0
     try:
-        if is_postgres():
-            rows = []
-            for row in data:
-                fecha_desde = parse_iso_date(row.get('fecha_desde'))
-                fecha_hasta = parse_iso_date(row.get('fecha_hasta'))
-                if not fecha_desde or not fecha_hasta:
-                    continue
-                rows.append({
-                    'REF_PER': int(row['ref_per']),
-                    'DURACION': float(row.get('duracion')) if row.get('duracion') is not None else None,
-                    'FECHA_DESDE': fecha_desde.strftime('%Y-%m-%d') if isinstance(fecha_desde, (datetime.datetime, datetime.date)) else str(fecha_desde).split('T')[0],
-                    'FECHA_HASTA': fecha_hasta.strftime('%Y-%m-%d') if isinstance(fecha_hasta, (datetime.datetime, datetime.date)) else str(fecha_hasta).split('T')[0],
-                    'PARTICION_NUM': int(row['particion_num']) if row.get('particion_num') is not None else None,
-                    'ORIGEN_FICHERO': row.get('origen_fichero', 'Carga manual')
-                })
-            sb_insert('VACACIONES', rows)
-            inserted_count = len(rows)
-            return jsonify({"status": "success", "message": f"{inserted_count} periodos de vacaciones importados correctamente"}), 201
-
-        from flask import g
-        db_type = getattr(g, 'db_type', 'oracle')
+        rows = []
         for row in data:
             fecha_desde = parse_iso_date(row.get('fecha_desde'))
             fecha_hasta = parse_iso_date(row.get('fecha_hasta'))
             if not fecha_desde or not fecha_hasta:
                 continue
-            if db_type == 'postgres':
-                query = """
-                    INSERT INTO VACACIONES (REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
-                    VALUES (:ref_per, :duracion, CAST(:fecha_desde AS DATE), CAST(:fecha_hasta AS DATE), :particion_num, :origen_fichero, CURRENT_TIMESTAMP)
-                """
-            else:
-                query = """
-                    INSERT INTO VACACIONES (ID_VACACION, REF_PER, DURACION, FECHA_DESDE, FECHA_HASTA, PARTICION_NUM, ORIGEN_FICHERO, FECHA_CARGA)
-                    VALUES (SEQ_VACACIONES.NEXTVAL, :ref_per, :duracion, TO_DATE(:fecha_desde, 'YYYY-MM-DD'), TO_DATE(:fecha_hasta, 'YYYY-MM-DD'), :particion_num, :origen_fichero, SYSDATE)
-                """
-            params = {
-                "ref_per": int(row['ref_per']),
-                "duracion": float(row.get('duracion')) if row.get('duracion') is not None else None,
-                "fecha_desde": row['fecha_desde'].split('T')[0],
-                "fecha_hasta": row['fecha_hasta'].split('T')[0],
-                "particion_num": int(row['particion_num']) if row.get('particion_num') is not None else None,
-                "origen_fichero": row.get('origen_fichero', 'Carga manual')
-            }
-            execute_query(query, params, is_select=False)
-            inserted_count += 1
-            
+            rows.append({
+                'REF_PER': int(row['ref_per']),
+                'DURACION': float(row.get('duracion')) if row.get('duracion') is not None else None,
+                'FECHA_DESDE': fecha_desde.strftime('%Y-%m-%d') if isinstance(fecha_desde, (datetime.datetime, datetime.date)) else str(fecha_desde).split('T')[0],
+                'FECHA_HASTA': fecha_hasta.strftime('%Y-%m-%d') if isinstance(fecha_hasta, (datetime.datetime, datetime.date)) else str(fecha_hasta).split('T')[0],
+                'PARTICION_NUM': int(row['particion_num']) if row.get('particion_num') is not None else None,
+                'ORIGEN_FICHERO': row.get('origen_fichero', 'Carga manual')
+            })
+        sb_insert('VACACIONES', rows)
+        inserted_count = len(rows)
         return jsonify({"status": "success", "message": f"{inserted_count} periodos de vacaciones importados correctamente"}), 201
+        
+        # Oracle path removed
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -881,36 +695,15 @@ def update_vacacion():
         fecha_hasta = fecha_hasta.strftime('%Y-%m-%d')
 
     try:
-        if is_postgres():
-            sb_update('VACACIONES', {
-                'DURACION': float(duracion) if duracion is not None and duracion != '' else None,
-                'FECHA_DESDE': fecha_desde,
-                'FECHA_HASTA': fecha_hasta,
-                'PARTICION_NUM': int(particion_num) if particion_num is not None and particion_num != '' else None,
-                'ORIGEN_FICHERO': origen_fichero
-            }, {'ID_VACACION': int(id_vacacion)})
-            return jsonify({"status": "success", "message": "Periodo de vacaciones actualizado correctamente"})
-
-        db_type = getattr(g, 'db_type', 'oracle')
-        query = """
-            UPDATE VACACIONES
-            SET DURACION = :duracion,
-                FECHA_DESDE = TO_DATE(:fecha_desde, 'YYYY-MM-DD'),
-                FECHA_HASTA = TO_DATE(:fecha_hasta, 'YYYY-MM-DD'),
-                PARTICION_NUM = :particion_num,
-                ORIGEN_FICHERO = :origen_fichero
-            WHERE ID_VACACION = :id_vacacion
-        """
-        params = {
-            "duracion": float(duracion) if duracion is not None and duracion != '' else None,
-            "fecha_desde": fecha_desde,
-            "fecha_hasta": fecha_hasta,
-            "particion_num": int(particion_num) if particion_num is not None and particion_num != '' else None,
-            "origen_fichero": origen_fichero,
-            "id_vacacion": int(id_vacacion)
-        }
-        execute_query(query, params, is_select=False)
+        sb_update('VACACIONES', {
+            'DURACION': float(duracion) if duracion is not None and duracion != '' else None,
+            'FECHA_DESDE': fecha_desde,
+            'FECHA_HASTA': fecha_hasta,
+            'PARTICION_NUM': int(particion_num) if particion_num is not None and particion_num != '' else None,
+            'ORIGEN_FICHERO': origen_fichero
+        }, {'ID_VACACION': int(id_vacacion)})
         return jsonify({"status": "success", "message": "Periodo de vacaciones actualizado correctamente"})
+        # Oracle path removed
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -924,25 +717,14 @@ def delete_vacaciones():
         return jsonify({"error": "Se requiere el ID de vacaciones o el nombre del fichero de origen"}), 400
 
     try:
-        if is_postgres():
-            if id_vacacion:
-                sb_delete('VACACIONES', {'ID_VACACION': int(id_vacacion)})
-                message = "Periodo de vacaciones eliminado correctamente"
-            else:
-                sb_delete('VACACIONES', {'ORIGEN_FICHERO': origen_fichero})
-                message = f"Todas las vacaciones del fichero '{origen_fichero}' han sido eliminadas"
-            return jsonify({"status": "success", "message": message})
-
         if id_vacacion:
-            query = "DELETE FROM VACACIONES WHERE ID_VACACION = :id_vacacion"
-            execute_query(query, {"id_vacacion": int(id_vacacion)}, is_select=False)
+            sb_delete('VACACIONES', {'ID_VACACION': int(id_vacacion)})
             message = "Periodo de vacaciones eliminado correctamente"
         else:
-            query = "DELETE FROM VACACIONES WHERE ORIGEN_FICHERO = :origen_fichero"
-            execute_query(query, {"origen_fichero": origen_fichero}, is_select=False)
+            sb_delete('VACACIONES', {'ORIGEN_FICHERO': origen_fichero})
             message = f"Todas las vacaciones del fichero '{origen_fichero}' han sido eliminadas"
-
         return jsonify({"status": "success", "message": message})
+        # Oracle path removed
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -955,32 +737,13 @@ def manage_festivos():
     if request.method == 'GET':
         year = request.args.get('year')
         ref_ubi = request.args.get('ref_ubi')
-        if is_postgres():
-            filters = {}
-            if year:
-                filters['YEAR'] = int(year)
-            if ref_ubi:
-                filters['REF_UBI'] = int(ref_ubi)
-            try:
-                return jsonify(sb_select('FESTIVOS', filters))
-            except Exception as e:
-                return jsonify({"error": str(e)}), 500
-
-        params = {}
-        where = []
-        query = "SELECT * FROM FESTIVOS"
+        filters = {}
         if year:
-            where.append("YEAR = :year")
-            params['year'] = int(year)
+            filters['YEAR'] = int(year)
         if ref_ubi:
-            where.append("REF_UBI = :ref_ubi")
-            params['ref_ubi'] = int(ref_ubi)
-        if where:
-            query += " WHERE " + " AND ".join(where)
-        query += " ORDER BY FECHA"
+            filters['REF_UBI'] = int(ref_ubi)
         try:
-            result = execute_query(query, params)
-            return jsonify(result)
+            return jsonify(sb_select('FESTIVOS', filters))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -993,19 +756,14 @@ def manage_festivos():
         if not year or not fecha:
             return jsonify({"error": "Se requieren 'year' y 'fecha'"}), 400
         try:
-            if is_postgres():
-                sb_insert('FESTIVOS', [{
-                    'YEAR': year,
-                    'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
-                    'FECHA': fecha,
-                    'DESCRIPCION': descripcion
-                }])
-                return jsonify({"status": "success"}), 201
-
-            query = "INSERT INTO FESTIVOS (ID_FESTIVO, YEAR, REF_UBI, FECHA, DESCRIPCION) VALUES (SEQ_FESTIVOS.NEXTVAL, :year, :ref_ubi, TO_DATE(:fecha, 'YYYY-MM-DD'), :descripcion)"
-            params = { 'year': year, 'ref_ubi': int(ref_ubi) if ref_ubi is not None else None, 'fecha': fecha, 'descripcion': descripcion }
-            execute_query(query, params, is_select=False)
+            sb_insert('FESTIVOS', [{
+                'YEAR': year,
+                'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
+                'FECHA': fecha,
+                'DESCRIPCION': descripcion
+            }])
             return jsonify({"status": "success"}), 201
+            # Oracle path removed
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -1019,19 +777,14 @@ def manage_festivos():
         fecha = data.get('fecha')
         descripcion = data.get('descripcion')
         try:
-            if is_postgres():
-                sb_update('FESTIVOS', {
-                    'YEAR': int(year) if year is not None else None,
-                    'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
-                    'FECHA': fecha,
-                    'DESCRIPCION': descripcion
-                }, {'ID_FESTIVO': int(id_festivo)})
-                return jsonify({"status": "success"})
-
-            query = "UPDATE FESTIVOS SET YEAR=:year, REF_UBI=:ref_ubi, FECHA=TO_DATE(:fecha, 'YYYY-MM-DD'), DESCRIPCION=:descripcion WHERE ID_FESTIVO=:id_festivo"
-            params = { 'year': int(year) if year is not None else None, 'ref_ubi': int(ref_ubi) if ref_ubi is not None else None, 'fecha': fecha, 'descripcion': descripcion, 'id_festivo': int(id_festivo) }
-            execute_query(query, params, is_select=False)
+            sb_update('FESTIVOS', {
+                'YEAR': int(year) if year is not None else None,
+                'REF_UBI': int(ref_ubi) if ref_ubi is not None else None,
+                'FECHA': fecha,
+                'DESCRIPCION': descripcion
+            }, {'ID_FESTIVO': int(id_festivo)})
             return jsonify({"status": "success"})
+            # Oracle path removed
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -1040,13 +793,9 @@ def manage_festivos():
         if not id_festivo:
             return jsonify({"error": "Se requiere 'id' param para eliminar"}), 400
         try:
-            if is_postgres():
-                sb_delete('FESTIVOS', {'ID_FESTIVO': int(id_festivo)})
-                return jsonify({"status": "success"})
-
-            query = "DELETE FROM FESTIVOS WHERE ID_FESTIVO = :id_festivo"
-            execute_query(query, {'id_festivo': int(id_festivo)}, is_select=False)
+            sb_delete('FESTIVOS', {'ID_FESTIVO': int(id_festivo)})
             return jsonify({"status": "success"})
+            # Oracle path removed
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

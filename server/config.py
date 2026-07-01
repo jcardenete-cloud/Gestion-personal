@@ -16,10 +16,15 @@ def load_properties(filepath):
 class Config:
     def __init__(self, props_path='database.properties'):
         props = load_properties(props_path)
-        self.DB_USER = props.get('db.user', 'system')
-        self.DB_PASSWORD = props.get('db.password', 'oracle')
-        self.DB_DSN = props.get('db.dsn', 'localhost:1521/xe')
-        self.DB_CLIENT_PATH = props.get('db.client_path', None)
+
+        # ============================================================
+        # ORACLE DB SETTINGS - COMMENTED OUT (not in use)
+        # Only PostgreSQL/Supabase is used now.
+        # ============================================================
+        # self.DB_USER = props.get('db.user', 'system')
+        # self.DB_PASSWORD = props.get('db.password', 'oracle')
+        # self.DB_DSN = props.get('db.dsn', 'localhost:1521/xe')
+        # self.DB_CLIENT_PATH = props.get('db.client_path', None)
 
         # PostgreSQL — las variables de entorno tienen prioridad (Render/producción)
         # Si no existen, se usa database.properties (desarrollo local)

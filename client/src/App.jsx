@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban, Database, Search, Moon, Sun, Palette, LogOut, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, RefreshCw, Calendar } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban, Database, Moon, Sun, Palette, LogOut, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, RefreshCw, Calendar } from 'lucide-react';
+import { supabase } from './supabaseClient';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
 import AssignmentsPage from './pages/AssignmentsPage';
@@ -19,15 +20,15 @@ import SyncPage from './pages/SyncPage';
 
 function App() {
   useEffect(() => {
-    console.log("App Version 3.0 Loaded");
-    // alert("App Version 3.0 Loaded"); // Uncomment if needed for aggressive testing
+    console.log("App Version 4.0 Loaded — Supabase Auth");
   }, []);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('db_user'));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isSidebarPinned, setIsSidebarPinned] = useState(localStorage.getItem('sidebarPinned') !== 'false');
   const [isHovered, setIsHovered] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-  const [dbType, setDbType] = useState(localStorage.getItem('db_type') || 'oracle');
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     let themeClass = '';
@@ -53,42 +54,38 @@ function App() {
     { id: 'office', label: 'Modo Office', icon: <Palette size={16} style={{ color: '#0078d4' }} /> },
   ];
 
-  const handleLogin = (user, pass, dbType) => {
-    localStorage.setItem('db_user', user);
-    localStorage.setItem('db_password', pass);
-    localStorage.setItem('db_type', dbType);
-    setDbType(dbType);
-    setIsAuthenticated(true);
-  };
+  // Supabase Auth: comprueba la sesión al arrancar y escucha cambios
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session);
+      setUserEmail(session?.user?.email || '');
+      setAuthLoading(false);
+    });
 
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('db_user');
-    localStorage.removeItem('db_password');
-    localStorage.removeItem('db_type');
-    setDbType('oracle');
-    setIsAuthenticated(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+      setUserEmail(session?.user?.email || '');
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    let timeoutId;
+  const handleLogin = () => {
+    // El estado se actualiza via onAuthStateChange
+  };
 
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      // 2 horas en milisegundos: 1 * 60 * 60 * 1000 = 3600000
-      timeoutId = setTimeout(handleLogout, 3600000);
-    };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    // onAuthStateChange pondrá isAuthenticated = false automáticamente
+  };
 
-    if (isAuthenticated) {
-      resetTimer();
-      const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
-      events.forEach(e => window.addEventListener(e, resetTimer));
-
-      return () => {
-        clearTimeout(timeoutId);
-        events.forEach(e => window.removeEventListener(e, resetTimer));
-      };
-    }
-  }, [isAuthenticated, handleLogout]);
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-dark)' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>Cargando...</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginPage onLogin={handleLogin} />;
@@ -118,25 +115,24 @@ function App() {
           </button>
         </div>
 
-        {/* Database Indicator - Moved to top for visibility */}
+        {/* Supabase connection indicator */}
         <div style={{ 
           margin: '0 0.8rem 1.5rem 0.8rem',
           padding: '0.6rem',
-          background: dbType === 'postgres' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(249, 115, 22, 0.15)',
+          background: 'rgba(99, 102, 241, 0.15)',
           borderRadius: '10px',
-          border: '1px solid',
-          borderColor: dbType === 'postgres' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(249, 115, 22, 0.3)',
+          border: '1px solid rgba(99, 102, 241, 0.3)',
           display: 'flex',
           alignItems: 'center',
           gap: '0.7rem',
           justifyContent: isExpanded ? 'flex-start' : 'center'
         }}>
-          <Database size={18} style={{ color: dbType === 'postgres' ? '#818cf8' : '#fb923c' }} />
+          <Database size={18} style={{ color: '#818cf8' }} />
           {isExpanded && (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.65rem', opacity: 0.6, fontWeight: 600 }}>SERVIDOR ACTIVO</span>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                {dbType.toUpperCase()}
+            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span style={{ fontSize: '0.65rem', opacity: 0.6, fontWeight: 600 }}>SUPABASE</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {userEmail}
               </span>
             </div>
           )}

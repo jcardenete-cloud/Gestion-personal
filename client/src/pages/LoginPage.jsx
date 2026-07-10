@@ -1,35 +1,39 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import logo from '../assets/tragsa_logo.png';
-import api from '../api';
+import { supabase } from '../supabaseClient';
 
 const LoginPage = ({ onLogin }) => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [dbType, setDbType] = useState('postgres');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [showSettings, setShowSettings] = useState(false);
-    const [apiUrl, setApiUrlState] = useState(api.getApiUrl());
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-        const cleanUsername = username.trim();
 
         try {
-            await api.login(cleanUsername, password, dbType);
-            onLogin(cleanUsername, password, dbType);
+            const { error: authError } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+            if (authError) throw authError;
+            // onAuthStateChange en App.jsx detectará el login automáticamente
+            if (onLogin) onLogin();
         } catch (err) {
-            console.error(err);
-            const serverError = err.response?.data?.error;
-            const status = err.response?.status;
-            const message = err.message || 'Error al conectar.';
-            const fullError = serverError
-                ? `${serverError}${status ? ` (HTTP ${status})` : ''}`
-                : `${message}${status ? ` (HTTP ${status})` : ''}`;
-            setError(fullError);
+            const msg = err.message || 'Error al iniciar sesión.';
+            // Traducir mensajes comunes de Supabase Auth al español
+            if (msg.includes('Invalid login credentials')) {
+                setError('Email o contraseña incorrectos.');
+            } else if (msg.includes('Email not confirmed')) {
+                setError('El email no ha sido confirmado. Revisa tu bandeja de entrada.');
+            } else if (msg.includes('Too many requests')) {
+                setError('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.');
+            } else {
+                setError(msg);
+            }
         } finally {
             setLoading(false);
         }
@@ -79,26 +83,15 @@ const LoginPage = ({ onLogin }) => {
 
                 <form onSubmit={handleSubmit} style={{ width: '100%' }}>
                     <div className="form-group">
-                        <label>Base de Datos</label>
-                        <select
-                            className="form-control"
-                            value={dbType}
-                            onChange={e => setDbType(e.target.value)}
-                            style={{ padding: '0.8rem', backgroundColor: 'var(--input-bg)', color: 'var(--input-text)' }}
-                        >
-                            <option value="postgres">PostgreSQL</option>
-                        </select>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Usuario</label>
+                        <label>Email</label>
                         <input
-                            type="text"
+                            type="email"
                             className="form-control"
-                            value={username}
-                            onChange={e => setUsername(e.target.value)}
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
                             style={{ padding: '0.8rem' }}
-                            placeholder={dbType === 'oracle' ? 'Ej. U012345' : 'Usuario Postgres'}
+                            placeholder="usuario@dominio.com"
+                            autoComplete="email"
                             required
                         />
                     </div>
@@ -110,6 +103,7 @@ const LoginPage = ({ onLogin }) => {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             style={{ padding: '0.8rem' }}
+                            autoComplete="current-password"
                             required
                         />
                     </div>
@@ -130,57 +124,14 @@ const LoginPage = ({ onLogin }) => {
                     </button>
                 </form>
 
-                <div style={{ marginTop: '1.5rem', width: '100%', textAlign: 'center' }}>
-                    <button
-                        type="button"
-                        onClick={() => setShowSettings(!showSettings)}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text-main)',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            textDecoration: 'underline',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            opacity: 0.7
-                        }}
-                    >
-                        ⚙️ {showSettings ? 'Ocultar Configuración' : 'Configurar Servidor API'}
-                    </button>
-                </div>
-
-                {showSettings && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        style={{ width: '100%', marginTop: '1rem' }}
-                    >
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>URL del Servidor API</label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={apiUrl}
-                                onChange={e => {
-                                    setApiUrlState(e.target.value);
-                                    api.setApiUrl(e.target.value);
-                                }}
-                                style={{
-                                    padding: '0.6rem',
-                                    fontSize: '0.85rem',
-                                    backgroundColor: 'var(--input-bg)',
-                                    color: 'var(--input-text)'
-                                }}
-                                placeholder="https://gestion-personal-backend.onrender.com/api"
-                            />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-                                Se guarda en localStorage de este navegador.
-                            </span>
-                        </div>
-                    </motion.div>
-                )}
+                <p style={{
+                    marginTop: '1.5rem',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center'
+                }}>
+                    Acceso gestionado por Supabase Auth
+                </p>
             </motion.div>
         </div>
     );

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Search, Download, Table as TableIcon, Check, X, Filter, Play, AlertCircle, Plus, Trash2, Settings } from 'lucide-react';
 import api from '../api';
+import { table as sbTable, normalizeKeys } from '../supabaseClient';
 import { normalizeString, formatDate } from '../utils';
 import * as XLSX from 'xlsx';
 
@@ -184,17 +185,43 @@ const QueryPage = () => {
     };
 
     const runQuery = async () => {
-        if (!generatedSql) return;
+        if (selectedTables.length === 0) {
+            setError('Selecciona al menos una tabla para consultar.');
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
-            const res = await api.runQuery(generatedSql);
-            setResults(res.data);
+            // Ejecutar la primera tabla seleccionada via SDK de Supabase
+            const tableName = selectedTables[0];
+            const cols = selectedColumns[tableName];
+            const selectStr = (cols && cols.length > 0) ? cols.map(c => c.toLowerCase()).join(',') : '*';
+
+            let builder = sbTable(tableName).select(selectStr);
+
+            // Aplicar filtros
+            for (const f of filters) {
+                if (f.table !== tableName) continue;
+                const col = f.column.toLowerCase();
+                const val = f.value;
+                if (f.operator === '=') builder = builder.eq(col, val);
+                else if (f.operator === '<>') builder = builder.neq(col, val);
+                else if (f.operator === '>') builder = builder.gt(col, val);
+                else if (f.operator === '<') builder = builder.lt(col, val);
+                else if (f.operator === 'LIKE') builder = builder.ilike(col, `%${val}%`);
+                else if (f.operator === 'LIKE_START') builder = builder.ilike(col, `${val}%`);
+                else if (f.operator === 'IS NULL') builder = builder.is(col, null);
+                else if (f.operator === 'IS NOT NULL') builder = builder.not(col, 'is', null);
+            }
+
+            const { data, error: qError } = await builder;
+            if (qError) throw new Error(qError.message);
+            setResults(normalizeKeys(data || []));
             setSortConfig({ key: null, direction: 'asc' });
             setCurrentPage(1);
         } catch (err) {
-            console.error("Query error:", err);
-            setError(err.response?.data?.error || "Error al ejecutar la consulta.");
+            console.error('Query error:', err);
+            setError(err.message || 'Error al ejecutar la consulta.');
         } finally {
             setLoading(false);
         }

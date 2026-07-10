@@ -10,8 +10,6 @@ const SyncPage = () => {
     const [importDetails, setImportDetails] = useState(null);
     const [file, setFile] = useState(null);
 
-    const dbType = localStorage.getItem('db_type') || 'oracle';
-    const dbUser = localStorage.getItem('db_user') || '';
 
     const handleExport = async () => {
         setLoading(true);
@@ -27,12 +25,12 @@ const SyncPage = () => {
             const dateStr = new Date().toISOString().split('T')[0];
             
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `backup_${dbType}_${dateStr}.json`);
+            downloadAnchor.setAttribute("download", `backup_supabase_${dateStr}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
 
-            setSuccess(`Copia de seguridad de ${dbType.toUpperCase()} exportada correctamente.`);
+            setSuccess(`Copia de seguridad de Supabase exportada correctamente.`);
         } catch (err) {
             setError(err.response?.data?.error || 'Error al exportar los datos.');
         } finally {
@@ -56,8 +54,8 @@ const SyncPage = () => {
         }
 
         const confirmImport = window.confirm(
-            `¡ATENCIÓN! Estás a punto de importar datos en la base de datos ${dbType.toUpperCase()}.\n\n` +
-            `Este proceso ELIMINARÁ permanentemente todos los registros actuales de Personal, Encargos, Ubicaciones y Vacaciones en ${dbType.toUpperCase()} y los sustituirá por los del archivo.\n\n` +
+            `¡ATENCIÓN! Estás a punto de importar datos en Supabase.\n\n` +
+            `Este proceso ELIMINARÁ permanentemente todos los registros actuales de Personal, Encargos, Ubicaciones y Vacaciones y los sustituirá por los del archivo.\n\n` +
             `¿Estás seguro de que quieres continuar?`
         );
 
@@ -115,13 +113,12 @@ const SyncPage = () => {
                             borderRadius: '20px',
                             fontSize: '0.85rem',
                             fontWeight: 'bold',
-                            backgroundColor: dbType === 'postgres' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(249, 115, 22, 0.2)',
-                            color: dbType === 'postgres' ? '#3b82f6' : '#f97316',
-                            border: `1px solid ${dbType === 'postgres' ? '#3b82f640' : '#f9731640'}`
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            color: '#3b82f6',
+                            border: '1px solid #3b82f640'
                         }}>
-                            {dbType.toUpperCase()}
+                            SUPABASE
                         </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Usuario: <strong>{dbUser}</strong></span>
                     </div>
                 </div>
             </div>
@@ -181,7 +178,7 @@ const SyncPage = () => {
                         disabled={loading}
                         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem' }}
                     >
-                        {loading ? 'Procesando...' : `Descargar Backup de ${dbType.toUpperCase()}`}
+                        {loading ? 'Procesando...' : `Descargar Backup de Supabase`}
                     </button>
                 </div>
 
@@ -193,7 +190,7 @@ const SyncPage = () => {
                             2. Importar Datos
                         </h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                            Sube un archivo de copia de seguridad (.json) exportado previamente para restaurar e igualar el contenido en la base de datos activa ({dbType.toUpperCase()}).
+                            Sube un archivo de copia de seguridad (.json) exportado previamente para restaurar e igualar el contenido en Supabase.
                         </p>
                         <div style={{ marginTop: '1rem' }}>
                             <input 
@@ -238,7 +235,7 @@ const SyncPage = () => {
                             cursor: file ? 'pointer' : 'not-allowed'
                         }}
                     >
-                        {loading ? 'Restaurando...' : `Reemplazar datos en ${dbType.toUpperCase()}`}
+                        {loading ? 'Restaurando...' : `Reemplazar datos en Supabase`}
                     </button>
                 </div>
             </div>
@@ -247,14 +244,13 @@ const SyncPage = () => {
             <div className="glass-card" style={{ padding: '1.5rem' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <HelpCircle size={18} style={{ color: 'var(--text-muted)' }} />
-                    Guía de sincronización manual entre bases de datos:
+                    Guía de sincronización:
                 </h3>
                 <ol style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                    <li>Inicia sesión seleccionando la base de datos de origen (la que contiene los cambios recientes, ej. <strong>Oracle</strong>).</li>
                     <li>Ve a esta página de Sincronización y pulsa en <strong>"Descargar Backup"</strong>. Se guardará un archivo JSON en tu equipo.</li>
-                    <li>Cierra sesión y vuelve a iniciarla seleccionando la base de datos destino (la que quieres actualizar, ej. <strong>Postgres</strong>).</li>
-                    <li>En esta misma página, selecciona el archivo JSON descargado en el paso 2 y haz clic en <strong>"Reemplazar datos"</strong>.</li>
-                    <li>¡Listo! Ambas bases de datos tendrán exactamente la misma información.</li>
+                    <li>Guarda el archivo JSON como copia de seguridad local o transfiérelo a otra instancia si fuera necesario.</li>
+                    <li>Para restaurar, selecciona el archivo JSON descargado y haz clic en <strong>"Reemplazar datos"</strong>.</li>
+                    <li>¡Listo! Supabase tendrá exactamente la misma información que el backup.</li>
                 </ol>
             </div>
         </motion.div>

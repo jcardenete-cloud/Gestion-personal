@@ -1,4 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Questrial&display=swap');
+@font-face {
+  font-family: 'HarmoniaSansProCyr-Cond';
+  src: url('./assets/fonts/HarmoniaSansProCyr-Cond.woff2') format('woff2'),
+    url('./assets/fonts/HarmoniaSansProCyr-Cond.woff') format('woff');
+  font-weight: 400;
+  /* O el grosor correspondiente (e.g., 300, 500, 700) */
+  font-style: normal;
+  font-display: swap;
+  /* Muestra una fuente del sistema mientras se descarga la fuente local */
+}
 
 :root {
   --primary: #2aa198;
@@ -84,11 +93,11 @@ button,
 input,
 select,
 textarea {
-  font-family: system_ui, sans-serif;
+  font-family: 'HarmoniaSansProCyr-Cond', sans-serif;
 }
 
 body {
-  font-family: system_ui, sans-serif;
+  font-family: 'HarmoniaSansProCyr-Cond', sans-serif;
   font-size: 0.9rem;
   background-color: var(--bg-dark);
   background-image: url('/src/assets/win11_bg.png');
@@ -293,17 +302,17 @@ td {
     border: none !important;
     overflow: hidden;
   }
-  
+
   .sidebar.pinned {
     width: 280px !important;
-    box-shadow: 0 0 50px rgba(0,0,0,0.5);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
   }
 
   .main-content {
     margin-left: 0 !important;
     padding: 1rem;
   }
-  
+
   .pin-button {
     background: var(--bg-card) !important;
     border: 1px solid var(--glass-border) !important;

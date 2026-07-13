@@ -116,7 +116,7 @@ function App() {
         </div>
 
         {/* Supabase connection indicator */}
-        <div style={{ 
+        <div style={{
           margin: '0 0.8rem 1.5rem 0.8rem',
           padding: '0.6rem',
           background: 'rgba(99, 102, 241, 0.15)',
@@ -154,12 +154,15 @@ function App() {
           <FolderKanban size={18} /> {isExpanded && <span>Resumen Total</span>}
         </NavLink>
         <NavLink to="/ubicacion" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MapPin size={18} /> {isExpanded && <span>Ubicación</span>}
-          </NavLink>
-          <NavLink to="/vacaciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <Calendar size={18} /> {isExpanded && <span>Vacaciones</span>}
-          </NavLink>
-        
+          <MapPin size={18} /> {isExpanded && <span>Ubicación</span>}
+        </NavLink>
+        <NavLink to="/personal-ubicacion" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <MapPin size={18} /> {isExpanded && <span>Personal Por Ubicación</span>}
+        </NavLink>
+        <NavLink to="/vacaciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Calendar size={18} /> {isExpanded && <span>Vacaciones</span>}
+        </NavLink>
+
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-card)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div style={{ position: 'relative' }}>
@@ -228,7 +231,7 @@ function App() {
           <Route path="/personal" element={<PersonalPage />} />
           <Route path="/asignaciones" element={<AssignmentsPage />} />
           <Route path="/resumen-asignaciones" element={<PersonalAssignmentsSummaryPage />} />
-          
+
           <Route path="/ubicacion" element={<UbicacionPage />} />
           <Route path="/personal-ubicacion" element={<PersonalByLocationPage />} />
           <Route path="/vacaciones" element={<VacacionesPage />} />

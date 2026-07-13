@@ -154,8 +154,11 @@ function App() {
           <FolderKanban size={18} /> {isExpanded && <span>Resumen Total</span>}
         </NavLink>
         <NavLink to="/ubicacion" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <MapPin size={18} /> {isExpanded && <span>Ubicación</span>}
-        </NavLink>
+            <MapPin size={18} /> {isExpanded && <span>Ubicación</span>}
+          </NavLink>
+          <NavLink to="/vacaciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Calendar size={18} /> {isExpanded && <span>Vacaciones</span>}
+          </NavLink>
         
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-card)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

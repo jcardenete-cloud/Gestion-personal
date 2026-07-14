@@ -29,6 +29,7 @@ const FestivosPage = () => {
     const loadUbicaciones = async () => {
         try {
             const res = await api.getUbicacion();
+            console.log('UBICACIONES raw:', JSON.stringify(res.data?.slice(0, 3)));
             setUbicaciones(res.data || []);
         } catch (err) {
             console.error('Error loading ubicaciones', err);
@@ -39,6 +40,7 @@ const FestivosPage = () => {
         setLoading(true);
         try {
             const res = await api.getFestivos(year, refUbi || null);
+            console.log('FESTIVOS raw (primeros 3):', JSON.stringify(res.data?.slice(0, 3)));
             setFestivos(res.data || []);
         } catch (err) {
             console.error('Error loading festivos', err);

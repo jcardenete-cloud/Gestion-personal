@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import api from '../api';
 import { Calendar, Plus, Trash2, Edit, X } from 'lucide-react';
 
@@ -8,6 +8,13 @@ const FestivosPage = () => {
     const [ubicaciones, setUbicaciones] = useState([]);
     const [festivos, setFestivos] = useState([]);
     const [loading, setLoading] = useState(false);
+    const ubicacionesMap = useMemo(() => {
+        const map = {};
+        ubicaciones.forEach(u => {
+            map[u.REF_UBI] = u.A_LUGAR;
+        });
+        return map;
+    }, [ubicaciones]);
     const [form, setForm] = useState({ fecha: '', descripcion: '', ref_ubi: '' });
     const [editingId, setEditingId] = useState(null);
 
@@ -141,7 +148,7 @@ const FestivosPage = () => {
                             {festivos.map(f => (
                                 <tr key={f.ID_FESTIVO || f.id_festivo || f.id_festivo}>
                                     <td>{(f.FECHA || f.fecha || '').split('T')[0]}</td>
-                                    <td>{f.REF_UBI ? (ubicaciones.find(u => u.REF_UBI == f.REF_UBI)?.A_LUGAR || f.REF_UBI) : 'Nacional'}</td>
+                                    <td>{f.REF_UBI ? (ubicacionesMap[String(f.REF_UBI)] || f.REF_UBI) : 'Nacional'}</td>
                                     <td>{f.DESCRIPCION || f.descripcion}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '0.4rem' }}>

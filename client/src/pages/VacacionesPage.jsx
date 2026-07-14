@@ -32,6 +32,7 @@ const VacacionesPage = () => {
     const [festivosCopyFromYear, setFestivosCopyFromYear] = useState(new Date().getFullYear() - 1);
     const [festivosCopyToYear, setFestivosCopyToYear] = useState(new Date().getFullYear());
     const [festivosCopyLoading, setFestivosCopyLoading] = useState(false);
+    const [festivosSortConfig, setFestivosSortConfig] = useState({ key: 'FECHA', direction: 'asc' });
     const [personalList, setPersonalList] = useState([]);
     const [userMap, setUserMap] = useState({}); // clean_username -> employee
     const [locations, setLocations] = useState([]);
@@ -287,6 +288,35 @@ const VacacionesPage = () => {
             alert('Error al eliminar');
         }
     };
+
+    const handleFestivosSort = (key) => {
+        let direction = 'asc';
+        if (festivosSortConfig && festivosSortConfig.key === key && festivosSortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setFestivosSortConfig({ key, direction });
+    };
+
+    const sortedFestivos = useMemo(() => {
+        if (!festivosList) return [];
+        let sortableItems = [...festivosList];
+        if (festivosSortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue = a[festivosSortConfig.key] || a[festivosSortConfig.key.toLowerCase()] || '';
+                let bValue = b[festivosSortConfig.key] || b[festivosSortConfig.key.toLowerCase()] || '';
+                
+                if (festivosSortConfig.key === 'REF_UBI') {
+                    aValue = a.REF_UBI != null ? (locations.find(u => String(u.REF_UBI) === String(a.REF_UBI))?.A_LUGAR || a.REF_UBI) : 'Nacional';
+                    bValue = b.REF_UBI != null ? (locations.find(u => String(u.REF_UBI) === String(b.REF_UBI))?.A_LUGAR || b.REF_UBI) : 'Nacional';
+                }
+
+                if (aValue < bValue) return festivosSortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return festivosSortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [festivosList, festivosSortConfig, locations]);
 
     // Export calendar view to Excel with colors
     const handleExportCalendar = async () => {
@@ -2547,14 +2577,35 @@ const VacacionesPage = () => {
                                 <table style={{ width: '100%' }}>
                                     <thead>
                                         <tr>
-                                            <th>Fecha</th>
-                                            <th>Ubicación</th>
-                                            <th>Descripción</th>
+                                            <th onClick={() => handleFestivosSort('FECHA')} style={{ cursor: 'pointer' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    Fecha
+                                                    {festivosSortConfig?.key === 'FECHA' ? (
+                                                        festivosSortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                                                    ) : <ArrowUpDown size={14} style={{ opacity: 0.3 }} />}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleFestivosSort('REF_UBI')} style={{ cursor: 'pointer' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    Ubicación
+                                                    {festivosSortConfig?.key === 'REF_UBI' ? (
+                                                        festivosSortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                                                    ) : <ArrowUpDown size={14} style={{ opacity: 0.3 }} />}
+                                                </div>
+                                            </th>
+                                            <th onClick={() => handleFestivosSort('DESCRIPCION')} style={{ cursor: 'pointer' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    Descripción
+                                                    {festivosSortConfig?.key === 'DESCRIPCION' ? (
+                                                        festivosSortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                                                    ) : <ArrowUpDown size={14} style={{ opacity: 0.3 }} />}
+                                                </div>
+                                            </th>
                                             <th style={{ width: '120px', textAlign: 'center' }}>Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {festivosList.map(f => (
+                                        {sortedFestivos.map(f => (
                                             <tr key={f.ID_FESTIVO || f.id_festivo}>
                                                 <td>{formatDateStr(f.FECHA || f.fecha)}</td>
                                                 <td>{f.REF_UBI != null ? (locations.find(u => String(u.REF_UBI) === String(f.REF_UBI))?.A_LUGAR || f.REF_UBI) : 'Nacional'}</td>

@@ -2557,7 +2557,7 @@ const VacacionesPage = () => {
                                         {festivosList.map(f => (
                                             <tr key={f.ID_FESTIVO || f.id_festivo}>
                                                 <td>{formatDateStr(f.FECHA || f.fecha)}</td>
-                                                <td>{f.REF_UBI != null ? `${f.REF_UBI}` : 'Nacional'}</td>
+                                                <td>{f.REF_UBI != null ? (locations.find(u => String(u.REF_UBI) === String(f.REF_UBI))?.A_LUGAR || f.REF_UBI) : 'Nacional'}</td>
                                                 <td>{f.DESCRIPCION || f.descripcion}</td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>

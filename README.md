@@ -17,7 +17,7 @@ Este proyecto consta de un backend en Python (Flask) y un frontend en React (Vit
    ```bash
    pip install -r requirements.txt
    ```
-3. Configura la base de datos en `database.properties` (desarrollo local) o mediante variables de entorno (producción/Render).
+3. Configura la base de datos en `database.properties` (desarrollo local) o mediante variables de entorno (producción/GitHub).
 
 ### Opciones de Configuración (`database.properties`)
 
@@ -47,9 +47,9 @@ supabase.url=https://tu_proyecto.supabase.co
 supabase.service_role_key=tu_supabase_service_role_key
 ```
 
-### Variables de Entorno (Producción / Render)
+### Variables de Entorno (Producción / GitHub)
 
-En entornos de producción (configurados en `render.yaml`), las siguientes variables de entorno tienen prioridad sobre el archivo `database.properties`:
+En entornos de producción (desplegados desde GitHub), las siguientes variables de entorno tienen prioridad sobre el archivo `database.properties`:
 - `PORT`: Puerto en el que corre el servidor backend (por defecto `5000`).
 - `SECRET_KEY`: Clave secreta para las sesiones de Flask.
 - `PG_HOST`: Host de la base de datos PostgreSQL.
@@ -124,5 +124,5 @@ La aplicación gestiona y espera que existan las siguientes tablas en el esquema
 
 ## Despliegue e Integración Continua (CI/CD)
 
-- **Render**: Configurado mediante [render.yaml](file:///e:/fcardene/Utiles/Repositorio_DevOps/Gestion-Personal/render.yaml) para desplegar el backend en Python utilizando `waitress` (`run_prod.py`).
+- **GitHub**: Tanto el frontend como el backend se ejecutan directamente desde GitHub, estando conectados a la base de datos de Supabase a través de su API. Ya no se utiliza Render para el despliegue.
 - **Azure Pipelines**: Configurado en [azure-pipelines.yml](file:///e:/fcardene/Utiles/Repositorio_DevOps/Gestion-Personal/azure-pipelines.yml) para sincronizar automáticamente la rama `main` del repositorio de Azure DevOps con un repositorio espejo de GitHub mediante un Personal Access Token (`GITHUB_PAT`).

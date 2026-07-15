@@ -1,8 +1,0 @@
-flask
-flask-cors
-oracledb
-python-dotenv
-waitress
-psycopg2-binary
-openpyxl
-supabase

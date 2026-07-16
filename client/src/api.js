@@ -256,7 +256,7 @@ const getVacacionesFicheros = async () => {
   const { data, error } = await table('VACACIONES').select('origen_fichero');
   throwIfError({ error });
   const values = [...new Set((data || []).map((r) => r.origen_fichero).filter(Boolean))].sort();
-  return { data: values };
+  return { data: values.map(v => ({ ORIGEN_FICHERO: v })) };
 };
 
 const importVacaciones = async (rows) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban, Database, Moon, Sun, Palette, LogOut, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, RefreshCw, Calendar } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban, Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, RefreshCw, Calendar } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
@@ -22,7 +22,11 @@ function App() {
   useEffect(() => {
     console.log("App Version 4.0 Loaded — Supabase Auth");
   }, []);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return 'onenote';
+    return saved || 'onenote';
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [isSidebarPinned, setIsSidebarPinned] = useState(localStorage.getItem('sidebarPinned') !== 'false');
@@ -32,8 +36,7 @@ function App() {
 
   useEffect(() => {
     let themeClass = '';
-    if (theme === 'light') themeClass = 'light-theme';
-    else if (theme === 'onenote') themeClass = 'onenote-theme';
+    if (theme === 'onenote') themeClass = 'onenote-theme';
     else if (theme === 'office') themeClass = 'office-theme';
     document.documentElement.className = themeClass;
     localStorage.setItem('theme', theme);
@@ -48,8 +51,6 @@ function App() {
   };
 
   const themes = [
-    { id: 'dark', label: 'Solarized Noche', icon: <Moon size={16} /> },
-    { id: 'light', label: 'Solarized Día', icon: <Sun size={16} /> },
     { id: 'onenote', label: 'Modo OneNote', icon: <Palette size={16} style={{ color: '#7719aa' }} /> },
     { id: 'office', label: 'Modo Office', icon: <Palette size={16} style={{ color: '#0078d4' }} /> },
   ];

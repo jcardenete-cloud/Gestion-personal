@@ -50,14 +50,20 @@ const VacacionesPage = () => {
     
     // Filters and sorting
     const [projects, setProjects] = useState([]);
-    const [historyFilterProject, setHistoryFilterProject] = useState('');
-    const [historyFilterUser, setHistoryFilterUser] = useState('');
+    // Multi-select filter: arrays of REF_PER (numbers)
+    const [historyFilterUsers, setHistoryFilterUsers] = useState([]); // multi-select employees
     const [historyFilterFile, setHistoryFilterFile] = useState('');
     const [historyFilterYear, setHistoryFilterYear] = useState('');
+    // History: search text for adding employees to filter
+    const [historyUserSearch, setHistoryUserSearch] = useState('');
+    const [historyUserSearchOpen, setHistoryUserSearchOpen] = useState(false);
+    // Calendar multi-select employees
+    const [calendarFilterUsers, setCalendarFilterUsers] = useState([]); // multi-select employees
     const [calendarFilterProject, setCalendarFilterProject] = useState('');
     const [projectAssignments, setProjectAssignments] = useState([]);
-    const [calendarFilterUser, setCalendarFilterUser] = useState('');
-    const [calendarSearchText, setCalendarSearchText] = useState('');
+    const [calendarUserSearch, setCalendarUserSearch] = useState('');
+    const [calendarUserSearchOpen, setCalendarUserSearchOpen] = useState(false);
+    const [calendarProjectSearch, setCalendarProjectSearch] = useState('');
     const [calendarYear, setCalendarYear] = useState(new Date().getFullYear().toString());
     const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
     const [calendarLoading, setCalendarLoading] = useState(false);
@@ -625,9 +631,10 @@ const VacacionesPage = () => {
 
     useEffect(() => {
         if (activeTab === 'calendar') {
-            loadHistory({ projectFilter: calendarFilterProject, refPer: calendarFilterUser, year: calendarYear });
+            // Load all for selected year/project; employee multi-filter is applied client-side
+            loadHistory({ projectFilter: calendarFilterProject, year: calendarYear });
         }
-    }, [activeTab, calendarFilterProject, calendarFilterUser, calendarYear]);
+    }, [activeTab, calendarFilterProject, calendarYear]);
 
     useEffect(() => {
         loadFestivosForCalendar(calendarYear);
@@ -641,7 +648,7 @@ const VacacionesPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, festivosTabYear, festivosTabRefUbi]);
 
-    // Load assignments when a project filter is selected
+    // Load assignments when a project filter is selected (calendar tab)
     useEffect(() => {
         let cancelled = false;
         const loadAssignments = async () => {
@@ -660,6 +667,32 @@ const VacacionesPage = () => {
         loadAssignments();
         return () => { cancelled = true; };
     }, [calendarFilterProject]);
+
+    // Helper: add a person to a multi-select filter array (no duplicates)
+    const addPersonToFilter = (refPer, setter) => {
+        setter(prev => prev.includes(refPer) ? prev : [...prev, refPer]);
+    };
+
+    // Helper: remove a person from a multi-select filter array
+    const removePersonFromFilter = (refPer, setter) => {
+        setter(prev => prev.filter(r => r !== refPer));
+    };
+
+    // Helper: get employees from an encargo and add all to filter
+    const addEncargoPeopleToFilter = async (codigopr, setter) => {
+        if (!codigopr) return;
+        try {
+            const res = await api.getAssignments(codigopr);
+            const refs = (res.data || []).map(a => a.REF_PER).filter(Boolean);
+            setter(prev => {
+                const set = new Set(prev);
+                refs.forEach(r => set.add(r));
+                return Array.from(set);
+            });
+        } catch (err) {
+            console.error('Error loading encargo assignments:', err);
+        }
+    };
 
     // Filtered (only active) and sorted personal list for dropdowns
     const activePersonalList = useMemo(() => {
@@ -752,25 +785,26 @@ const VacacionesPage = () => {
             const refsWithVac = new Set((loadedVacaciones || []).map(v => v.REF_PER));
             list = list.filter(person => refsWithVac.has(person.REF_PER));
         }
-        if (calendarFilterUser) {
-            return list.filter(person => person.REF_PER === parseInt(calendarFilterUser, 10));
+        // Multi-select employee filter
+        if (calendarFilterUsers.length > 0) {
+            const selectedSet = new Set(calendarFilterUsers);
+            return list.filter(person => selectedSet.has(person.REF_PER));
         }
         return list;
-    }, [activePersonalList, calendarFilterUser, calendarFilterProject, projectAssignments, calendarOnlyWithVacations, loadedVacaciones]);
+    }, [activePersonalList, calendarFilterUsers, calendarFilterProject, projectAssignments, calendarOnlyWithVacations, loadedVacaciones]);
 
     const calendarVacationsByPerson = useMemo(() => {
         const grouped = {};
-        const filtered = loadedVacaciones.filter(item => {
-            if (calendarFilterUser && item.REF_PER !== parseInt(calendarFilterUser, 10)) return false;
-            return true;
-        });
+        const filtered = calendarFilterUsers.length > 0
+            ? loadedVacaciones.filter(item => calendarFilterUsers.includes(item.REF_PER))
+            : loadedVacaciones;
         filtered.forEach(item => {
             const refPer = item.REF_PER;
             if (!grouped[refPer]) grouped[refPer] = [];
             grouped[refPer].push(item);
         });
         return grouped;
-    }, [loadedVacaciones, calendarFilterUser]);
+    }, [loadedVacaciones, calendarFilterUsers]);
 
     const selectedMonthLabel = useMemo(() => {
         const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1174,7 +1208,7 @@ const VacacionesPage = () => {
         XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
         const filters = [
             historyFilterYear && `año${historyFilterYear}`,
-            historyFilterProject && historyFilterProject,
+            historyFilterUsers.length > 0 && `emp${historyFilterUsers.length}`,
             historyFilterFile && historyFilterFile.replace(/\.[^/.]+$/, ''),
         ].filter(Boolean).join('_');
         const filename = `vacaciones${filters ? '_' + filters : ''}_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -1317,8 +1351,8 @@ const VacacionesPage = () => {
             }
         }
         
-        // Filter by user
-        if (historyFilterUser && item.REF_PER !== parseInt(historyFilterUser)) {
+        // Multi-select employee filter
+        if (historyFilterUsers.length > 0 && !historyFilterUsers.includes(item.REF_PER)) {
             return false;
         }
         
@@ -1777,9 +1811,9 @@ const VacacionesPage = () => {
                     >
                         {/* Filters and Management */}
                         <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.2rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) auto', gap: '1rem', marginBottom: '1rem' }}>
                                 <div className="form-group" style={{ margin: 0 }}>
-                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Buscar Empleado / Fichero</label>
+                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Buscar / Fichero</label>
                                     <div style={{ position: 'relative' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                                         <input
@@ -1791,22 +1825,6 @@ const VacacionesPage = () => {
                                             onChange={(e) => { setHistorySearch(e.target.value); setCurrentPage(1); }}
                                         />
                                     </div>
-                                </div>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Filtrar por Proyecto</label>
-                                    <select
-                                        className="form-control"
-                                        style={{ height: '34px', fontSize: '0.85rem', padding: '0 0.5rem' }}
-                                        value={historyFilterProject}
-                                        onChange={(e) => { setHistoryFilterProject(e.target.value); setCurrentPage(1); loadHistory(e.target.value); }}
-                                    >
-                                        <option value="">Todos los proyectos</option>
-                                        {activeProjects.map(proj => (
-                                            <option key={proj.CODIGOPR} value={proj.CODIGOPR}>
-                                                {proj.CODIGOPR} - {proj.NOMBRE}
-                                            </option>
-                                        ))}
-                                    </select>
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Filtrar por Año</label>
@@ -1836,6 +1854,86 @@ const VacacionesPage = () => {
                                         ))}
                                     </select>
                                 </div>
+                                {/* Multi-select employee filter */}
+                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir empleado al filtro</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
+                                            placeholder="Buscar por nombre..."
+                                            value={historyUserSearch}
+                                            onChange={(e) => { setHistoryUserSearch(e.target.value); setHistoryUserSearchOpen(true); }}
+                                            onFocus={() => setHistoryUserSearchOpen(true)}
+                                            onBlur={() => setTimeout(() => setHistoryUserSearchOpen(false), 180)}
+                                        />
+                                    </div>
+                                    {historyUserSearchOpen && historyUserSearch && (
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                                            background: 'var(--card-bg)', border: '1px solid var(--border-card)',
+                                            borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px'
+                                        }}>
+                                            {/* Add by encargo */}
+                                            {activeProjects
+                                                .filter(p => {
+                                                    const s = normalizeString(historyUserSearch);
+                                                    return normalizeString(p.CODIGOPR).includes(s) || normalizeString(p.NOMBRE || '').includes(s);
+                                                })
+                                                .slice(0, 4)
+                                                .map(proj => (
+                                                    <div
+                                                        key={'enc-' + proj.CODIGOPR}
+                                                        style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                                        onMouseDown={() => {
+                                                            addEncargoPeopleToFilter(proj.CODIGOPR, setHistoryFilterUsers);
+                                                            setHistoryUserSearch('');
+                                                            setHistoryUserSearchOpen(false);
+                                                            setCurrentPage(1);
+                                                        }}
+                                                    >
+                                                        <span style={{ padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(99,102,241,0.18)', color: '#818cf8', fontSize: '0.7rem', fontWeight: 700 }}>Encargo</span>
+                                                        {proj.CODIGOPR} – {proj.NOMBRE}
+                                                    </div>
+                                                ))
+                                            }
+                                            {/* Add by person */}
+                                            {activePersonalList
+                                                .filter(p => {
+                                                    if (historyFilterUsers.includes(p.REF_PER)) return false;
+                                                    const s = normalizeString(historyUserSearch);
+                                                    return normalizeString(`${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''} ${p.NOMBRE || ''}`).includes(s) || normalizeString(p.USUARIO || '').includes(s);
+                                                })
+                                                .slice(0, 8)
+                                                .map(p => (
+                                                    <div
+                                                        key={'emp-' + p.REF_PER}
+                                                        style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', borderBottom: '1px solid rgba(148,163,184,0.08)' }}
+                                                        onMouseDown={() => {
+                                                            addPersonToFilter(p.REF_PER, setHistoryFilterUsers);
+                                                            setHistoryUserSearch('');
+                                                            setHistoryUserSearchOpen(false);
+                                                            setCurrentPage(1);
+                                                        }}
+                                                    >
+                                                        {p.APELLIDO1} {p.APELLIDO2}, {p.NOMBRE}
+                                                        <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{(p.USUARIO || '').split('@')[0]}</span>
+                                                    </div>
+                                                ))
+                                            }
+                                            {activePersonalList.filter(p => {
+                                                if (historyFilterUsers.includes(p.REF_PER)) return false;
+                                                const s = normalizeString(historyUserSearch);
+                                                return normalizeString(`${p.APELLIDO1||''} ${p.APELLIDO2||''} ${p.NOMBRE||''}`).includes(s) || normalizeString(p.USUARIO||'').includes(s);
+                                            }).length === 0 && activeProjects.filter(pr => { const s=normalizeString(historyUserSearch); return normalizeString(pr.CODIGOPR).includes(s)||normalizeString(pr.NOMBRE||'').includes(s); }).length === 0 && (
+                                                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                     <button
                                         className="btn btn-primary"
@@ -1856,6 +1954,39 @@ const VacacionesPage = () => {
                                     </button>
                                 </div>
                             </div>
+                            {/* Active employee filter chips */}
+                            {historyFilterUsers.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(148,163,184,0.15)', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '0.2rem' }}>Filtrando:</span>
+                                    {historyFilterUsers.map(refPer => {
+                                        const person = activePersonalList.find(p => p.REF_PER === refPer);
+                                        if (!person) return null;
+                                        return (
+                                            <span key={refPer} style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                padding: '0.2rem 0.55rem', borderRadius: '20px',
+                                                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                                                fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 600
+                                            }}>
+                                                {person.APELLIDO1} {person.APELLIDO2[0] ? person.APELLIDO2[0]+'.' : ''}, {person.NOMBRE}
+                                                <button
+                                                    onClick={() => { removePersonFromFilter(refPer, setHistoryFilterUsers); setCurrentPage(1); }}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', lineHeight: 1, color: '#818cf8', display: 'flex', alignItems: 'center' }}
+                                                    title="Quitar del filtro"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                    <button
+                                        onClick={() => { setHistoryFilterUsers([]); setCurrentPage(1); }}
+                                        style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginLeft: '0.2rem', textDecoration: 'underline' }}
+                                    >
+                                        Limpiar todo
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Bulk Delete imported files */}
                             {historyFilterFile && (
@@ -2171,57 +2302,108 @@ const VacacionesPage = () => {
                         transition={{ duration: 0.2 }}
                     >
                         <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 0.8fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Buscar Empleado o Proyecto</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        placeholder="Nombre, apellido, código proyecto..."
-                                        style={{ height: '34px', fontSize: '0.85rem', padding: '0 0.5rem' }}
-                                        value={calendarSearchText}
-                                        onChange={(e) => setCalendarSearchText(e.target.value)}
-                                    />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: '1rem', alignItems: 'end', marginBottom: '0.75rem' }}>
+                                {/* Multi-select employee filter */}
+                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir empleado al filtro</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
+                                            placeholder="Nombre del empleado..."
+                                            value={calendarUserSearch}
+                                            onChange={(e) => { setCalendarUserSearch(e.target.value); setCalendarUserSearchOpen(true); }}
+                                            onFocus={() => setCalendarUserSearchOpen(true)}
+                                            onBlur={() => setTimeout(() => setCalendarUserSearchOpen(false), 180)}
+                                        />
+                                    </div>
+                                    {calendarUserSearchOpen && calendarUserSearch && (
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                                            background: 'var(--card-bg)', border: '1px solid var(--border-card)',
+                                            borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px'
+                                        }}>
+                                            {activePersonalList
+                                                .filter(p => {
+                                                    if (calendarFilterUsers.includes(p.REF_PER)) return false;
+                                                    const s = normalizeString(calendarUserSearch);
+                                                    return normalizeString(`${p.APELLIDO1||''} ${p.APELLIDO2||''} ${p.NOMBRE||''}`).includes(s) || normalizeString(p.USUARIO||'').includes(s);
+                                                })
+                                                .slice(0, 10)
+                                                .map(p => (
+                                                    <div
+                                                        key={p.REF_PER}
+                                                        style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', borderBottom: '1px solid rgba(148,163,184,0.08)' }}
+                                                        onMouseDown={() => {
+                                                            addPersonToFilter(p.REF_PER, setCalendarFilterUsers);
+                                                            setCalendarUserSearch('');
+                                                            setCalendarUserSearchOpen(false);
+                                                        }}
+                                                    >
+                                                        {p.APELLIDO1} {p.APELLIDO2}, {p.NOMBRE}
+                                                        <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{(p.USUARIO||'').split('@')[0]}</span>
+                                                    </div>
+                                                ))
+                                            }
+                                            {activePersonalList.filter(p => {
+                                                if (calendarFilterUsers.includes(p.REF_PER)) return false;
+                                                const s = normalizeString(calendarUserSearch);
+                                                return normalizeString(`${p.APELLIDO1||''} ${p.APELLIDO2||''} ${p.NOMBRE||''}`).includes(s)||normalizeString(p.USUARIO||'').includes(s);
+                                            }).length === 0 && (
+                                                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Filtrar por Persona</label>
-                                    <select
-                                        className="form-control"
-                                        style={{ height: '34px', fontSize: '0.85rem', padding: '0 0.5rem' }}
-                                        value={calendarFilterUser}
-                                        onChange={(e) => { setCalendarFilterUser(e.target.value); setCurrentPage(1); }}
-                                    >
-                                        <option value="">Todas las personas</option>
-                                        {activePersonalList.filter(person => 
-                                            !calendarSearchText || 
-                                            `${person.APELLIDO1} ${person.APELLIDO2} ${person.NOMBRE}`.toLowerCase().includes(calendarSearchText.toLowerCase()) ||
-                                            (person.USUARIO || '').toLowerCase().includes(calendarSearchText.toLowerCase())
-                                        ).map(person => (
-                                            <option key={person.REF_PER} value={person.REF_PER}>
-                                                {person.APELLIDO1} {person.APELLIDO2}, {person.NOMBRE}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group" style={{ margin: 0 }}>
-                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Filtrar por Proyecto</label>
-                                    <select
-                                        className="form-control"
-                                        style={{ height: '34px', fontSize: '0.85rem', padding: '0 0.5rem' }}
-                                        value={calendarFilterProject}
-                                        onChange={(e) => { setCalendarFilterProject(e.target.value); setCurrentPage(1); }}
-                                    >
-                                        <option value="">Todos los proyectos</option>
-                                        {activeProjects.filter(proj =>
-                                            !calendarSearchText ||
-                                            proj.CODIGOPR.toLowerCase().includes(calendarSearchText.toLowerCase()) ||
-                                            proj.NOMBRE.toLowerCase().includes(calendarSearchText.toLowerCase())
-                                        ).map(proj => (
-                                            <option key={proj.CODIGOPR} value={proj.CODIGOPR}>
-                                                {proj.CODIGOPR} - {proj.NOMBRE}
-                                            </option>
-                                        ))}
-                                    </select>
+                                {/* Filter by encargo (adds all employees of that encargo) */}
+                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                    <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir por encargo</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
+                                            placeholder="Código o nombre encargo..."
+                                            value={calendarProjectSearch}
+                                            onChange={(e) => setCalendarProjectSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    {calendarProjectSearch && (
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                                            background: 'var(--card-bg)', border: '1px solid var(--border-card)',
+                                            borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px'
+                                        }}>
+                                            {activeProjects
+                                                .filter(p => {
+                                                    const s = normalizeString(calendarProjectSearch);
+                                                    return normalizeString(p.CODIGOPR).includes(s) || normalizeString(p.NOMBRE||'').includes(s);
+                                                })
+                                                .slice(0, 8)
+                                                .map(proj => (
+                                                    <div
+                                                        key={proj.CODIGOPR}
+                                                        style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', borderBottom: '1px solid rgba(148,163,184,0.08)' }}
+                                                        onMouseDown={async () => {
+                                                            await addEncargoPeopleToFilter(proj.CODIGOPR, setCalendarFilterUsers);
+                                                            setCalendarProjectSearch('');
+                                                        }}
+                                                    >
+                                                        <span style={{ padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(99,102,241,0.18)', color: '#818cf8', fontSize: '0.7rem', fontWeight: 700, marginRight: '0.4rem' }}>+todos</span>
+                                                        {proj.CODIGOPR} – {proj.NOMBRE}
+                                                    </div>
+                                                ))
+                                            }
+                                            {activeProjects.filter(p => { const s=normalizeString(calendarProjectSearch); return normalizeString(p.CODIGOPR).includes(s)||normalizeString(p.NOMBRE||'').includes(s); }).length === 0 && (
+                                                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Año</label>
@@ -2263,6 +2445,39 @@ const VacacionesPage = () => {
                                     <label htmlFor="only-with-vacations" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Solo con vac.</label>
                                 </div>
                             </div>
+                            {/* Active employee filter chips for calendar */}
+                            {calendarFilterUsers.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(148,163,184,0.15)', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '0.2rem' }}>Filtrando:</span>
+                                    {calendarFilterUsers.map(refPer => {
+                                        const person = activePersonalList.find(p => p.REF_PER === refPer);
+                                        if (!person) return null;
+                                        return (
+                                            <span key={refPer} style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                padding: '0.2rem 0.55rem', borderRadius: '20px',
+                                                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                                                fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 600
+                                            }}>
+                                                {person.APELLIDO1} {person.APELLIDO2 ? person.APELLIDO2[0]+'.' : ''}, {person.NOMBRE}
+                                                <button
+                                                    onClick={() => removePersonFromFilter(refPer, setCalendarFilterUsers)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', lineHeight: 1, color: '#818cf8', display: 'flex', alignItems: 'center' }}
+                                                    title="Quitar del filtro"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                    <button
+                                        onClick={() => setCalendarFilterUsers([])}
+                                        style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', marginLeft: '0.2rem', textDecoration: 'underline' }}
+                                    >
+                                        Limpiar todo
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="glass-card" style={{ overflowX: 'auto', padding: '1rem' }}>

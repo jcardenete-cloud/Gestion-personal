@@ -378,6 +378,28 @@ const importBackup = async (payload) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// APP_USUARIOS (tabla de usuarios de la aplicación con roles)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getAppUsuarios = () => selectAll('APP_USUARIOS', null, 'id');
+
+const getAppUsuarioByEmail = async (email) => {
+  const { data, error } = await table('APP_USUARIOS')
+    .select('*')
+    .ilike('email', email.trim())
+    .maybeSingle();
+  // maybeSingle devuelve null si no existe, sin lanzar error
+  if (error) throwIfError({ error });
+  return { data: data ? normalizeKeys([data])[0] : null };
+};
+
+const createAppUsuario = (data) => insertRows('APP_USUARIOS', data);
+
+const updateAppUsuario = (id, data) => updateRow('APP_USUARIOS', data, { ID: id });
+
+const deleteAppUsuario = (id) => deleteRow('APP_USUARIOS', { ID: id });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA / QUERY (sin soporte en cliente)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -415,6 +437,13 @@ const api = {
   logout,
   getSession,
   getApiUrl,
+
+  // App Usuarios (roles)
+  getAppUsuarios,
+  getAppUsuarioByEmail,
+  createAppUsuario,
+  updateAppUsuario,
+  deleteAppUsuario,
   setApiUrl,
 
   // Encargos

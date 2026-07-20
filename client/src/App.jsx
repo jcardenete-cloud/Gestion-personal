@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban, Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, RefreshCw, Calendar } from 'lucide-react';
-import { supabase } from './supabaseClient';
+import {
+    LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban,
+    Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight,
+    ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck
+} from 'lucide-react';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
 import AssignmentsPage from './pages/AssignmentsPage';
@@ -9,30 +12,27 @@ import Dashboard from './pages/Dashboard';
 import UbicacionPage from './pages/UbicacionPage';
 import PersonalByLocationPage from './pages/PersonalByLocationPage';
 import VacacionesPage from './pages/VacacionesPage';
-
+import UsuariosPage from './pages/UsuariosPage';
 import logo from './assets/tragsa_logo.png';
-
 import LoginPage from './pages/LoginPage';
-
 import PersonalAssignmentsSummaryPage from './pages/PersonalAssignmentsSummaryPage';
-
-
+import { useAuth } from './AuthContext';
 
 function App() {
   useEffect(() => {
-    console.log("App Version 4.0 Loaded — Supabase Auth");
+    console.log("App Version 4.1 Loaded — Role-based Access");
   }, []);
+
+  const { isAuthenticated, userEmail, isAdmin, isReadOnly, authLoading, authError, handleLogout, appUser } = useAuth();
+
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark' || saved === 'light') return 'onenote';
     return saved || 'onenote';
   });
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
   const [isSidebarPinned, setIsSidebarPinned] = useState(localStorage.getItem('sidebarPinned') !== 'false');
   const [isHovered, setIsHovered] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     let themeClass = '';
@@ -55,41 +55,33 @@ function App() {
     { id: 'office', label: 'Modo Office', icon: <Palette size={16} style={{ color: '#0078d4' }} /> },
   ];
 
-  // Supabase Auth: comprueba la sesión al arrancar y escucha cambios
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
-      setUserEmail(session?.user?.email || '');
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(!!session);
-      setUserEmail(session?.user?.email || '');
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleLogin = () => {
-    // El estado se actualiza via onAuthStateChange
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    // onAuthStateChange pondrá isAuthenticated = false automáticamente
-  };
-
+  // Loading state (auth + role resolution)
   if (authLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-dark)' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>Cargando...</div>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-dark)', gap: '1rem' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>Verificando acceso...</div>
+      </div>
+    );
+  }
+
+  // Auth error (email not in APP_USUARIOS)
+  if (authError) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-dark)', padding: '2rem' }}>
+        <div className="glass-card" style={{ padding: '2.5rem', maxWidth: '480px', width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.75rem', color: '#fca5a5' }}>Acceso denegado</h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>{authError}</p>
+          <button className="btn btn-primary" onClick={handleLogout} style={{ width: '100%', justifyContent: 'center' }}>
+            Volver al inicio de sesión
+          </button>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={() => {}} />;
   }
 
   const isExpanded = isSidebarPinned || isHovered;
@@ -116,24 +108,29 @@ function App() {
           </button>
         </div>
 
-        {/* Supabase connection indicator */}
+        {/* User info & role badge */}
         <div style={{
           margin: '0 0.8rem 1.5rem 0.8rem',
           padding: '0.6rem',
-          background: 'rgba(99, 102, 241, 0.15)',
+          background: isAdmin ? 'rgba(99, 102, 241, 0.15)' : 'rgba(148,163,184,0.1)',
           borderRadius: '10px',
-          border: '1px solid rgba(99, 102, 241, 0.3)',
+          border: `1px solid ${isAdmin ? 'rgba(99, 102, 241, 0.3)' : 'rgba(148,163,184,0.2)'}`,
           display: 'flex',
           alignItems: 'center',
           gap: '0.7rem',
           justifyContent: isExpanded ? 'flex-start' : 'center'
         }}>
-          <Database size={18} style={{ color: '#818cf8' }} />
+          {isAdmin
+            ? <ShieldCheck size={18} style={{ color: '#818cf8', flexShrink: 0 }} />
+            : <Database size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
+          }
           {isExpanded && (
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <span style={{ fontSize: '0.65rem', opacity: 0.6, fontWeight: 600 }}>SUPABASE</span>
+              <span style={{ fontSize: '0.65rem', opacity: 0.6, fontWeight: 600 }}>
+                {isAdmin ? 'ADMINISTRADOR' : (appUser?.PERFIL?.toUpperCase() || 'CONSULTA')}
+              </span>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {userEmail}
+                {appUser ? `${appUser.NOMBRE} ${appUser.APELLIDO1}` : userEmail}
               </span>
             </div>
           )}
@@ -164,6 +161,12 @@ function App() {
           <Calendar size={18} /> {isExpanded && <span>Vacaciones</span>}
         </NavLink>
 
+        {/* Usuarios page: only visible to admins */}
+        {isAdmin && (
+          <NavLink to="/usuarios" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <ShieldCheck size={18} /> {isExpanded && <span>Usuarios App</span>}
+          </NavLink>
+        )}
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-card)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div style={{ position: 'relative' }}>
@@ -232,10 +235,10 @@ function App() {
           <Route path="/personal" element={<PersonalPage />} />
           <Route path="/asignaciones" element={<AssignmentsPage />} />
           <Route path="/resumen-asignaciones" element={<PersonalAssignmentsSummaryPage />} />
-
           <Route path="/ubicacion" element={<UbicacionPage />} />
           <Route path="/personal-ubicacion" element={<PersonalByLocationPage />} />
           <Route path="/vacaciones" element={<VacacionesPage />} />
+          {isAdmin && <Route path="/usuarios" element={<UsuariosPage />} />}
         </Routes>
       </main>
     </Router>

@@ -3,8 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
+import { useAuth } from '../AuthContext';
 
 const EncargosPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [data, setData] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -113,6 +116,10 @@ const EncargosPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canManage) {
+            alert('No tienes permisos para modificar encargos.');
+            return;
+        }
         try {
             const payload = { ...formData };
 
@@ -152,12 +159,20 @@ const EncargosPage = () => {
     };
 
     const handleEdit = (item) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar encargos.');
+            return;
+        }
         setEditingItem(item);
         setFormData(item);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar encargos.');
+            return;
+        }
         if (window.confirm("¿Seguro que desea eliminar?")) {
             try {
                 await api.deleteEncargo(id);
@@ -172,9 +187,11 @@ const EncargosPage = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem' }}>Gestión de Encargos</h2>
-                <button className="btn btn-primary" onClick={() => { setEditingItem(null); setIsModalOpen(true); }}>
-                    <Plus size={20} /> Nuevo Encargo
-                </button>
+                {canManage && (
+                    <button className="btn btn-primary" onClick={() => { setEditingItem(null); setIsModalOpen(true); }}>
+                        <Plus size={20} /> Nuevo Encargo
+                    </button>
+                )}
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
@@ -398,50 +415,55 @@ const EncargosPage = () => {
                         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="glass-card" style={{ width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                                 <h3>{editingItem ? 'Editar Encargo' : 'Nuevo Encargo'}</h3>
+                                {!canManage && (
+                                    <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                                        No tienes permisos para modificar encargos.
+                                    </div>
+                                )}
                                 <X size={24} style={{ cursor: 'pointer' }} onClick={() => setIsModalOpen(false)} />
                             </div>
                             <form onSubmit={handleSubmit}>
                                 <div className="form-group">
                                     <label>Código</label>
-                                    <input className="form-control" value={formData.CODIGOPR} onChange={e => setFormData({ ...formData, CODIGOPR: e.target.value })} disabled={editingItem} required />
+                                    <input className="form-control" value={formData.CODIGOPR} onChange={e => setFormData({ ...formData, CODIGOPR: e.target.value })} disabled={editingItem || !canManage} required />
                                 </div>
                                 <div className="form-group">
                                     <label>Nombre</label>
-                                    <input className="form-control" value={formData.NOMBRE} onChange={e => setFormData({ ...formData, NOMBRE: e.target.value })} required />
+                                    <input className="form-control" value={formData.NOMBRE} onChange={e => setFormData({ ...formData, NOMBRE: e.target.value })} required disabled={!canManage} />
                                 </div>
                                 <div className="form-group">
                                     <label>Área</label>
-                                    <input className="form-control" value={formData.AREA} onChange={e => setFormData({ ...formData, AREA: e.target.value })} />
+                                    <input className="form-control" value={formData.AREA} onChange={e => setFormData({ ...formData, AREA: e.target.value })} disabled={!canManage} />
                                 </div>
                                 <div style={{ display: 'flex', gap: '1rem' }}>
                                     <div className="form-group" style={{ flex: 1 }}>
                                         <label>Inicio</label>
-                                        <input type="date" className="form-control" value={formData.INICIO?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, INICIO: e.target.value })} />
+                                        <input type="date" className="form-control" value={formData.INICIO?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, INICIO: e.target.value })} disabled={!canManage} />
                                     </div>
                                     <div className="form-group" style={{ flex: 1 }}>
                                         <label>Fin</label>
-                                        <input type="date" className="form-control" value={formData.FIN?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, FIN: e.target.value })} />
+                                        <input type="date" className="form-control" value={formData.FIN?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, FIN: e.target.value })} disabled={!canManage} />
                                     </div>
                                 </div>
                                 <div className="form-group">
                                     <label>Cliente</label>
-                                    <input className="form-control" value={formData.CLIENTE} onChange={e => setFormData({ ...formData, CLIENTE: e.target.value })} />
+                                    <input className="form-control" value={formData.CLIENTE} onChange={e => setFormData({ ...formData, CLIENTE: e.target.value })} disabled={!canManage} />
                                 </div>
                                 <div className="form-group">
                                     <label>Fin Real</label>
-                                    <input type="date" className="form-control" value={formData.FIN_REAL?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, FIN_REAL: e.target.value })} />
+                                    <input type="date" className="form-control" value={formData.FIN_REAL?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, FIN_REAL: e.target.value })} disabled={!canManage} />
                                 </div>
                                 <div className="form-group">
                                     <label>Presupuesto</label>
-                                    <input type="number" step="0.01" className="form-control" value={formData.PRESUPUESTO} onChange={e => setFormData({ ...formData, PRESUPUESTO: e.target.value })} />
+                                    <input type="number" step="0.01" className="form-control" value={formData.PRESUPUESTO} onChange={e => setFormData({ ...formData, PRESUPUESTO: e.target.value })} disabled={!canManage} />
                                 </div>
                                 <div className="form-group">
                                     <label>Descripción</label>
-                                    <textarea className="form-control" value={formData.DESCRIPCION} onChange={e => setFormData({ ...formData, DESCRIPCION: e.target.value })} rows="3" />
+                                    <textarea className="form-control" value={formData.DESCRIPCION} onChange={e => setFormData({ ...formData, DESCRIPCION: e.target.value })} rows="3" disabled={!canManage} />
                                 </div>
                                 <div className="form-group">
                                     <label>Infor</label>
-                                    <input className="form-control" value={formData.INFOR} onChange={e => setFormData({ ...formData, INFOR: e.target.value })} />
+                                    <input className="form-control" value={formData.INFOR} onChange={e => setFormData({ ...formData, INFOR: e.target.value })} disabled={!canManage} />
                                 </div>
                                 <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
                                     {editingItem ? 'Actualizar' : 'Crear'}

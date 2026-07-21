@@ -3,8 +3,11 @@ import { motion } from 'framer-motion';
 import { UserPlus, Trash2, Edit2, X, Save, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
+import { useAuth } from '../AuthContext';
 
 const AssignmentsPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [encargos, setEncargos] = useState([]);
     const [personal, setPersonal] = useState([]);
     const [selectedEncargo, setSelectedEncargo] = useState('');
@@ -118,6 +121,10 @@ const AssignmentsPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canManage) {
+            alert('No tienes permisos para modificar asignaciones.');
+            return;
+        }
         try {
             const payload = { ...newAssignment, CODIGOPR: selectedEncargo };
 
@@ -143,6 +150,10 @@ const AssignmentsPage = () => {
     };
 
     const handleEdit = (assignment) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar asignaciones.');
+            return;
+        }
         setEditingRefPer(assignment.REF_PER);
         setNewAssignment({
             REF_PER: assignment.REF_PER,
@@ -159,6 +170,10 @@ const AssignmentsPage = () => {
     };
 
     const handleDelete = async (ref_per) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar asignaciones.');
+            return;
+        }
         if (window.confirm("¿Quitar personal del encargo?")) {
             await api.deleteAssignment(ref_per, selectedEncargo);
             loadAssignments();
@@ -206,6 +221,11 @@ const AssignmentsPage = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
                     <div className="glass-card">
                         <h3>{editingRefPer ? 'Editar Asignación' : 'Asignar Personal'}</h3>
+                        {!canManage && (
+                            <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                                No tienes permisos para modificar asignaciones.
+                            </div>
+                        )}
                         <form onSubmit={handleSubmit} style={{ marginTop: '1.5rem' }}>
                             <div className="form-group">
                                 <label>Buscar Persona</label>
@@ -227,7 +247,7 @@ const AssignmentsPage = () => {
                                     value={newAssignment.REF_PER}
                                     onChange={e => setNewAssignment({ ...newAssignment, REF_PER: e.target.value })}
                                     required
-                                    disabled={!!editingRefPer}
+                                    disabled={!!editingRefPer || !canManage}
                                 >
                                     <option value="">-- Seleccione persona --</option>
                                     {personal
@@ -240,26 +260,26 @@ const AssignmentsPage = () => {
                             </div>
                             <div className="form-group">
                                 <label>Alta</label>
-                                <input type="date" className="form-control" value={newAssignment.ALTA} onChange={e => setNewAssignment({ ...newAssignment, ALTA: e.target.value })} />
+                                <input type="date" className="form-control" value={newAssignment.ALTA} onChange={e => setNewAssignment({ ...newAssignment, ALTA: e.target.value })} disabled={!canManage} />
                             </div>
                             <div className="form-group">
                                 <label>Baja</label>
-                                <input type="date" className="form-control" value={newAssignment.BAJA} onChange={e => setNewAssignment({ ...newAssignment, BAJA: e.target.value })} />
+                                <input type="date" className="form-control" value={newAssignment.BAJA} onChange={e => setNewAssignment({ ...newAssignment, BAJA: e.target.value })} disabled={!canManage} />
                             </div>
                             <div className="form-group">
                                 <label>Porcentaje (%)</label>
-                                <input type="number" className="form-control" value={newAssignment.PORCENTAJE} onChange={e => setNewAssignment({ ...newAssignment, PORCENTAJE: e.target.value })} />
+                                <input type="number" className="form-control" value={newAssignment.PORCENTAJE} onChange={e => setNewAssignment({ ...newAssignment, PORCENTAJE: e.target.value })} disabled={!canManage} />
                             </div>
                             <div className="form-group">
                                 <label>RTP</label>
-                                <select className="form-control" value={newAssignment.RTP} onChange={e => setNewAssignment({ ...newAssignment, RTP: e.target.value })} >
+                                <select className="form-control" value={newAssignment.RTP} onChange={e => setNewAssignment({ ...newAssignment, RTP: e.target.value })} disabled={!canManage} >
                                     <option value="S">S</option>
                                     <option value="N">N</option>
                                 </select>
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={!canManage}>
                                     {editingRefPer ? <Save size={18} /> : <UserPlus size={18} />}
                                     {editingRefPer ? 'Guardar Cambios' : 'Asignar'}
                                 </button>
@@ -328,14 +348,18 @@ const AssignmentsPage = () => {
                                         <td>{a.PORCENTAJE}%</td>
 
                                         <td>
-                                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                <button className="btn" style={{ padding: '0.5rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => handleEdit(a)}>
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                <button className="btn" style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={() => handleDelete(a.REF_PER)}>
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                                            {canManage ? (
+                                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                                    <button className="btn" style={{ padding: '0.5rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => handleEdit(a)}>
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button className="btn" style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={() => handleDelete(a.REF_PER)}>
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Solo lectura</span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

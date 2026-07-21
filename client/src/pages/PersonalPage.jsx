@@ -3,8 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
+import { useAuth } from '../AuthContext';
 
 const PersonalPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [data, setData] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -148,6 +151,10 @@ const PersonalPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canManage) {
+            alert('No tienes permisos para modificar personal.');
+            return;
+        }
         try {
             const payload = { ...formData };
 
@@ -183,9 +190,11 @@ const PersonalPage = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem' }}>Lista de Personal</h2>
-                <button className="btn btn-primary" onClick={() => { setEditingItem(null); setFormData(initialFormState); setIsModalOpen(true); }}>
-                    <Plus size={20} /> Nuevo Personal
-                </button>
+                {canManage && (
+                    <button className="btn btn-primary" onClick={() => { setEditingItem(null); setFormData(initialFormState); setIsModalOpen(true); }}>
+                        <Plus size={20} /> Nuevo Personal
+                    </button>
+                )}
             </div>
 
             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -382,7 +391,7 @@ const PersonalPage = () => {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                                     <div className="form-group">
                                         <label>Ref Personal</label>
-                                        <input type="number" className="form-control" value={formData.REF_PER} onChange={e => setFormData({ ...formData, REF_PER: e.target.value })} disabled={editingItem} required />
+                                        <input type="number" className="form-control" value={formData.REF_PER} onChange={e => setFormData({ ...formData, REF_PER: e.target.value })} disabled={editingItem || !canManage} required />
                                     </div>
                                     <div className="form-group">
                                         <label>Nº Ficha</label>
@@ -404,20 +413,20 @@ const PersonalPage = () => {
 
                                     <div className="form-group">
                                         <label>Nombre</label>
-                                        <input className="form-control" value={formData.NOMBRE} onChange={e => setFormData({ ...formData, NOMBRE: e.target.value })} required />
+                                        <input className="form-control" value={formData.NOMBRE} onChange={e => setFormData({ ...formData, NOMBRE: e.target.value })} required disabled={!canManage} />
                                     </div>
                                     <div className="form-group">
                                         <label>Primer Apellido</label>
-                                        <input className="form-control" value={formData.APELLIDO1} onChange={e => setFormData({ ...formData, APELLIDO1: e.target.value })} required />
+                                        <input className="form-control" value={formData.APELLIDO1} onChange={e => setFormData({ ...formData, APELLIDO1: e.target.value })} required disabled={!canManage} />
                                     </div>
                                     <div className="form-group">
                                         <label>Segundo Apellido</label>
-                                        <input className="form-control" value={formData.APELLIDO2} onChange={e => setFormData({ ...formData, APELLIDO2: e.target.value })} />
+                                        <input className="form-control" value={formData.APELLIDO2} onChange={e => setFormData({ ...formData, APELLIDO2: e.target.value })} disabled={!canManage} />
                                     </div>
 
                                     <div className="form-group">
                                         <label>Perfil</label>
-                                        <input className="form-control" value={formData.PERFIL} onChange={e => setFormData({ ...formData, PERFIL: e.target.value })} />
+                                        <input className="form-control" value={formData.PERFIL} onChange={e => setFormData({ ...formData, PERFIL: e.target.value })} disabled={!canManage} />
                                     </div>
                                     <div className="form-group">
                                         <label>Teléfono 1</label>
@@ -430,21 +439,21 @@ const PersonalPage = () => {
 
                                     <div className="form-group">
                                         <label>Activo (S/N)</label>
-                                        <select className="form-control" value={formData.ACTIVO} onChange={e => setFormData({ ...formData, ACTIVO: e.target.value })}>
+                                        <select className="form-control" value={formData.ACTIVO} onChange={e => setFormData({ ...formData, ACTIVO: e.target.value })} disabled={!canManage}>
                                             <option value="S">Sí</option>
                                             <option value="N">No</option>
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label>Es Responsable (S/N)</label>
-                                        <select className="form-control" value={formData.RESP} onChange={e => setFormData({ ...formData, RESP: e.target.value })}>
+                                        <select className="form-control" value={formData.RESP} onChange={e => setFormData({ ...formData, RESP: e.target.value })} disabled={!canManage}>
                                             <option value="S">Sí</option>
                                             <option value="N">No</option>
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label>En Plantilla (S/N)</label>
-                                        <select className="form-control" value={formData.PLANTILLA} onChange={e => setFormData({ ...formData, PLANTILLA: e.target.value })}>
+                                        <select className="form-control" value={formData.PLANTILLA} onChange={e => setFormData({ ...formData, PLANTILLA: e.target.value })} disabled={!canManage}>
                                             <option value="S">Sí</option>
                                             <option value="N">No</option>
                                         </select>

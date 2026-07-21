@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, createPortal } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Upload, Calendar, AlertTriangle, CheckCircle2, Trash2, Filter, 
@@ -90,6 +90,62 @@ const VacacionesPage = () => {
     
     // Ref for file input
     const fileInputRef = useRef(null);
+    const historyUserInputRef = useRef(null);
+    const calendarUserInputRef = useRef(null);
+    const calendarProjectInputRef = useRef(null);
+
+    const FloatingSuggestionList = ({ open, anchorRef, children, maxHeight = '220px' }) => {
+        const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+
+        useEffect(() => {
+            if (!open || !anchorRef?.current || typeof window === 'undefined') return;
+
+            const updatePosition = () => {
+                const rect = anchorRef.current.getBoundingClientRect();
+                setPosition({
+                    top: rect.bottom + window.scrollY,
+                    left: rect.left + window.scrollX,
+                    width: rect.width
+                });
+            };
+
+            updatePosition();
+            window.addEventListener('resize', updatePosition);
+            window.addEventListener('scroll', updatePosition, true);
+
+            return () => {
+                window.removeEventListener('resize', updatePosition);
+                window.removeEventListener('scroll', updatePosition, true);
+            };
+        }, [open, anchorRef]);
+
+        if (!open || typeof document === 'undefined') return null;
+
+        return createPortal(
+            <div
+                style={{
+                    position: 'fixed',
+                    top: position.top,
+                    left: position.left,
+                    width: position.width,
+                    zIndex: 2147483647,
+                    background: '#ffffff',
+                    border: '1px solid rgba(148, 163, 184, 0.35)',
+                    borderRadius: '8px',
+                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
+                    maxHeight,
+                    overflowY: 'auto',
+                    marginTop: '2px',
+                    opacity: 1,
+                    isolation: 'isolate',
+                    pointerEvents: 'auto'
+                }}
+            >
+                {children}
+            </div>,
+            document.body
+        );
+    };
 
     // Initial Load
     const loadMasterData = async () => {
@@ -1906,6 +1962,7 @@ const VacacionesPage = () => {
                                     <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
+                                            ref={historyUserInputRef}
                                             type="text"
                                             className="form-control"
                                             style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
@@ -1917,12 +1974,7 @@ const VacacionesPage = () => {
                                         />
                                     </div>
                                     {historyUserSearchOpen && historyUserSearch && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
-                                            background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
-                                            borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
-                                        }}>
+                                        <FloatingSuggestionList open={historyUserSearchOpen && historyUserSearch} anchorRef={historyUserInputRef}>
                                             {/* Add by encargo */}
                                             {activeProjects
                                                 .filter(p => {
@@ -1977,7 +2029,7 @@ const VacacionesPage = () => {
                                             }).length === 0 && activeProjects.filter(pr => { const s=normalizeString(historyUserSearch); return normalizeString(pr.CODIGOPR).includes(s)||normalizeString(pr.NOMBRE||'').includes(s); }).length === 0 && (
                                                 <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
                                             )}
-                                        </div>
+                                        </FloatingSuggestionList>
                                     )}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -2356,6 +2408,7 @@ const VacacionesPage = () => {
                                     <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
+                                            ref={calendarUserInputRef}
                                             type="text"
                                             className="form-control"
                                             style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
@@ -2367,12 +2420,7 @@ const VacacionesPage = () => {
                                         />
                                     </div>
                                     {calendarUserSearchOpen && calendarUserSearch && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
-                                            background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
-                                            borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
-                                        }}>
+                                        <FloatingSuggestionList open={calendarUserSearchOpen && calendarUserSearch} anchorRef={calendarUserInputRef}>
                                             {activePersonalList
                                                 .filter(p => {
                                                     if (calendarFilterUsers.includes(p.REF_PER)) return false;
@@ -2402,7 +2450,7 @@ const VacacionesPage = () => {
                                             }).length === 0 && (
                                                 <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
                                             )}
-                                        </div>
+                                        </FloatingSuggestionList>
                                     )}
                                 </div>
                                 {/* Filter by encargo (adds all employees of that encargo) */}
@@ -2411,6 +2459,7 @@ const VacacionesPage = () => {
                                     <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
+                                            ref={calendarProjectInputRef}
                                             type="text"
                                             className="form-control"
                                             style={{ paddingLeft: '2.2rem', height: '34px', fontSize: '0.85rem' }}
@@ -2420,12 +2469,7 @@ const VacacionesPage = () => {
                                         />
                                     </div>
                                     {calendarProjectSearch && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
-                                            background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
-                                            borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
-                                        }}>
+                                        <FloatingSuggestionList open={Boolean(calendarProjectSearch)} anchorRef={calendarProjectInputRef}>
                                             {activeProjects
                                                 .filter(p => {
                                                     const s = normalizeString(calendarProjectSearch);
@@ -2449,7 +2493,7 @@ const VacacionesPage = () => {
                                             {activeProjects.filter(p => { const s=normalizeString(calendarProjectSearch); return normalizeString(p.CODIGOPR).includes(s)||normalizeString(p.NOMBRE||'').includes(s); }).length === 0 && (
                                                 <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin resultados</div>
                                             )}
-                                        </div>
+                                        </FloatingSuggestionList>
                                     )}
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>

@@ -1919,7 +1919,7 @@ const VacacionesPage = () => {
                                     {historyUserSearchOpen && historyUserSearch && (
                                         <div style={{
                                             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                                            background: 'rgba(15, 23, 42, 0.97)', border: '1px solid rgba(148, 163, 184, 0.35)',
+                                            background: 'rgb(236, 237, 239)', border: '1px solid rgba(148, 163, 184, 0.35)',
                                             borderRadius: '8px', boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
                                             maxHeight: '220px', overflowY: 'auto', marginTop: '2px', backdropFilter: 'blur(6px)'
                                         }}>

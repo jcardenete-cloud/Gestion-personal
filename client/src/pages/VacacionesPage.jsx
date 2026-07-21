@@ -1901,9 +1901,9 @@ const VacacionesPage = () => {
                                     </select>
                                 </div>
                                 {/* Multi-select employee filter */}
-                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                <div className="form-group" style={{ margin: 0, position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir empleado al filtro</label>
-                                    <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
                                             type="text"
@@ -1918,10 +1918,10 @@ const VacacionesPage = () => {
                                     </div>
                                     {historyUserSearchOpen && historyUserSearch && (
                                         <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999,
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
                                             background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
                                             borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate'
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
                                         }}>
                                             {/* Add by encargo */}
                                             {activeProjects
@@ -2351,9 +2351,9 @@ const VacacionesPage = () => {
                         <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: '1rem', alignItems: 'end', marginBottom: '0.75rem' }}>
                                 {/* Multi-select employee filter */}
-                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                <div className="form-group" style={{ margin: 0, position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir empleado al filtro</label>
-                                    <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
                                             type="text"
@@ -2368,10 +2368,10 @@ const VacacionesPage = () => {
                                     </div>
                                     {calendarUserSearchOpen && calendarUserSearch && (
                                         <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999,
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
                                             background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
                                             borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate'
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
                                         }}>
                                             {activePersonalList
                                                 .filter(p => {
@@ -2406,9 +2406,9 @@ const VacacionesPage = () => {
                                     )}
                                 </div>
                                 {/* Filter by encargo (adds all employees of that encargo) */}
-                                <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                                <div className="form-group" style={{ margin: 0, position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                     <label style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Añadir por encargo</label>
-                                    <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'relative', zIndex: 2147483647, overflow: 'visible' }}>
                                         <Search size={14} style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
                                         <input
                                             type="text"
@@ -2421,10 +2421,10 @@ const VacacionesPage = () => {
                                     </div>
                                     {calendarProjectSearch && (
                                         <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999,
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2147483647,
                                             background: '#ffffff', border: '1px solid rgba(148, 163, 184, 0.35)',
                                             borderRadius: '8px', boxShadow: '0 16px 36px rgba(0, 0, 0, 0.35)',
-                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate'
+                                            maxHeight: '220px', overflowY: 'auto', marginTop: '2px', opacity: 1, isolation: 'isolate', pointerEvents: 'auto'
                                         }}>
                                             {activeProjects
                                                 .filter(p => {

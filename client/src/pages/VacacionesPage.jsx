@@ -8,8 +8,11 @@ import {
 import api from '../api';
 import { normalizeString } from '../utils';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../AuthContext';
 
 const VacacionesPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'history', 'calendar', 'festivos'
     
     // Available today tab state
@@ -200,6 +203,10 @@ const VacacionesPage = () => {
     };
 
     const handleFestivoSave = async () => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!festivosForm.fecha) { alert('Seleccione una fecha'); return; }
         try {
             const payload = {
@@ -226,6 +233,10 @@ const VacacionesPage = () => {
     };
 
     const handleFestivoCopy = async () => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (festivosCopyFromYear === festivosCopyToYear) {
             alert('El año origen y destino no pueden ser iguales');
             return;
@@ -275,6 +286,10 @@ const VacacionesPage = () => {
     };
 
     const handleFestivoEdit = (item) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         setFestivosEditingId(item.ID_FESTIVO || item.id_festivo);
         setFestivosForm({
             fecha: (item.FECHA || item.fecha || '').split('T')[0],
@@ -284,6 +299,10 @@ const VacacionesPage = () => {
     };
 
     const handleFestivoDelete = async (id) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!window.confirm('¿Eliminar este festivo?')) return;
         try {
             await api.deleteFestivo(id);
@@ -937,6 +956,10 @@ const VacacionesPage = () => {
     // Excel Parsing Handler
     // Excel Parsing Handler
     const handleFile = (file) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!file) return;
         setFileName(file.name);
 
@@ -1056,6 +1079,7 @@ const VacacionesPage = () => {
     const onDrop = (e) => {
         e.preventDefault();
         setIsDragging(false);
+        if (!canManage) return;
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             handleFile(files[0]);
@@ -1063,7 +1087,8 @@ const VacacionesPage = () => {
     };
 
     const triggerFileSelect = () => {
-        fileInputRef.current.click();
+        if (!canManage) return;
+        fileInputRef.current?.click();
     };
 
     // Handle user manual remapping dropdown
@@ -1087,6 +1112,10 @@ const VacacionesPage = () => {
 
     // Save imported vacations to database
     const handleSaveImport = async () => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         const validRows = excelRows.filter(r => r.status === 'valid');
         if (validRows.length === 0) {
             alert("No hay registros válidos para importar.");
@@ -1120,6 +1149,10 @@ const VacacionesPage = () => {
 
     // Delete single vacation
     const handleDeleteVacacion = async (id) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!window.confirm("¿Seguro que desea eliminar este periodo de vacaciones?")) return;
         try {
             await api.deleteVacacion(id);
@@ -1130,6 +1163,10 @@ const VacacionesPage = () => {
     };
 
     const startEditVacation = (item) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         setEditingVacationId(item.ID_VACACION);
         setEditingVacationData({
             DURACION: item.DURACION ?? '',
@@ -1152,6 +1189,10 @@ const VacacionesPage = () => {
     };
 
     const handleUpdateVacacion = async (id) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!id) return;
         setEditLoading(true);
         try {
@@ -1173,6 +1214,10 @@ const VacacionesPage = () => {
 
     // Bulk delete vacations by imported file
     const handleDeleteByFile = async (filename) => {
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
         if (!filename) return;
         if (!window.confirm(`¿Seguro que desea eliminar TODAS las vacaciones importadas del fichero "${filename}"? Esta acción no se puede deshacer.`)) return;
         
@@ -1587,17 +1632,17 @@ const VacacionesPage = () => {
                     >
                         {/* Drag and Drop Zone */}
                         <div 
-                            onDragOver={onDragOver}
-                            onDragLeave={onDragLeave}
-                            onDrop={onDrop}
-                            onClick={triggerFileSelect}
+                            onDragOver={canManage ? onDragOver : undefined}
+                            onDragLeave={canManage ? onDragLeave : undefined}
+                            onDrop={canManage ? onDrop : undefined}
+                            onClick={canManage ? triggerFileSelect : undefined}
                             style={{
                                 border: isDragging ? '2px dashed var(--primary)' : '2px dashed var(--border-card)',
                                 background: isDragging ? 'rgba(99, 102, 241, 0.05)' : 'var(--glass-bg)',
                                 borderRadius: '12px',
                                 padding: '2.5rem',
                                 textAlign: 'center',
-                                cursor: 'pointer',
+                                cursor: canManage ? 'pointer' : 'default',
                                 transition: 'all 0.2s',
                                 marginBottom: '2rem',
                                 display: 'flex',
@@ -1718,6 +1763,7 @@ const VacacionesPage = () => {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                 <select
                                                                     className="form-control"
+                                                                    disabled={!canManage}
                                                                     style={{ 
                                                                         padding: '0.2rem 0.5rem', 
                                                                         fontSize: '0.8rem', 
@@ -2009,6 +2055,7 @@ const VacacionesPage = () => {
                                     <button 
                                         onClick={() => handleDeleteByFile(historyFilterFile)}
                                         className="btn" 
+                                        disabled={!canManage}
                                         style={{ 
                                             padding: '0.3rem 0.8rem', 
                                             background: '#ef4444', 
@@ -2667,6 +2714,7 @@ const VacacionesPage = () => {
                                         value={festivosTabYear}
                                         onChange={(e) => setFestivosTabYear(Number(e.target.value))}
                                         style={{ width: '110px' }}
+                                        disabled={!canManage}
                                     />
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>
@@ -2676,6 +2724,7 @@ const VacacionesPage = () => {
                                         value={festivosTabRefUbi}
                                         onChange={(e) => setFestivosTabRefUbi(e.target.value)}
                                         style={{ width: '220px' }}
+                                        disabled={!canManage}
                                     >
                                         <option value="">Todas</option>
                                         <option value="null">Nacional</option>
@@ -2696,6 +2745,7 @@ const VacacionesPage = () => {
                                         value={festivosCopyFromYear}
                                         onChange={(e) => setFestivosCopyFromYear(Number(e.target.value))}
                                         style={{ width: '110px' }}
+                                        disabled={!canManage}
                                     />
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>
@@ -2706,12 +2756,13 @@ const VacacionesPage = () => {
                                         value={festivosCopyToYear}
                                         onChange={(e) => setFestivosCopyToYear(Number(e.target.value))}
                                         style={{ width: '110px' }}
+                                        disabled={!canManage}
                                     />
                                 </div>
                                 <button
                                     className="btn btn-primary"
                                     onClick={handleFestivoCopy}
-                                    disabled={festivosCopyLoading}
+                                    disabled={festivosCopyLoading || !canManage}
                                     style={{ padding: '0.4rem 0.8rem' }}
                                 >
                                     {festivosCopyLoading ? 'Copiando...' : 'Copiar'}
@@ -2733,6 +2784,7 @@ const VacacionesPage = () => {
                                         type="date"
                                         value={festivosForm.fecha}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, fecha: e.target.value }))}
+                                        disabled={!canManage}
                                     />
                                 </div>
                                 <div className="form-group" style={{ margin: 0 }}>
@@ -2742,6 +2794,7 @@ const VacacionesPage = () => {
                                         value={festivosForm.ref_ubi}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, ref_ubi: e.target.value }))}
                                         style={{ width: '220px' }}
+                                        disabled={!canManage}
                                     >
                                         <option value="">Nacional</option>
                                         {locations.map(u => (
@@ -2757,6 +2810,7 @@ const VacacionesPage = () => {
                                         value={festivosForm.descripcion}
                                         onChange={(e) => setFestivosForm(prev => ({ ...prev, descripcion: e.target.value }))}
                                         placeholder="Nombre del festivo..."
+                                        disabled={!canManage}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -2832,6 +2886,7 @@ const VacacionesPage = () => {
                                                             style={{ padding: '0.35rem 0.7rem', background: 'rgba(59,130,246,0.12)', color: '#2563eb' }}
                                                             onClick={() => handleFestivoEdit(f)}
                                                             title="Editar"
+                                                            disabled={!canManage}
                                                         >
                                                             <Edit size={14} />
                                                         </button>
@@ -2840,6 +2895,7 @@ const VacacionesPage = () => {
                                                             style={{ padding: '0.35rem 0.7rem', background: 'rgba(239,68,68,0.15)', color: '#fca5a5' }}
                                                             onClick={() => handleFestivoDelete(f.ID_FESTIVO || f.id_festivo)}
                                                             title="Eliminar"
+                                                            disabled={!canManage}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>

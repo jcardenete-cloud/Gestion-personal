@@ -303,14 +303,18 @@ const PersonalPage = () => {
                                 {visibleColumns.includes('INCORPORACION') && <td>{formatDate(item.INCORPORACION)}</td>}
                                 {visibleColumns.includes('BAJA') && <td>{formatDate(item.BAJA)}</td>}
                                 <td>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button className="btn" style={{ padding: '0.4rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }}>
-                                            <Edit2 size={14} />
-                                        </button>
-                                        <button className="btn" style={{ padding: '0.4rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={async () => { if (window.confirm("¿Eliminar?")) { await api.deletePersonal(item.REF_PER); loadData(); } }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
+                                    {canManage ? (
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <button className="btn" style={{ padding: '0.4rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }}>
+                                                <Edit2 size={14} />
+                                            </button>
+                                            <button className="btn" style={{ padding: '0.4rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={async () => { if (window.confirm("¿Eliminar?")) { await api.deletePersonal(item.REF_PER); loadData(); } }}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Solo lectura</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -387,7 +391,13 @@ const PersonalPage = () => {
                                 <h3>{editingItem ? 'Editar Personal' : 'Nuevo Personal'}</h3>
                                 <X size={24} style={{ cursor: 'pointer' }} onClick={() => setIsModalOpen(false)} />
                             </div>
+                            {!canManage && (
+                                <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                                    No tienes permisos para modificar personal.
+                                </div>
+                            )}
                             <form onSubmit={handleSubmit}>
+                                <fieldset disabled={!canManage} style={{ border: 'none', margin: 0, padding: 0 }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                                     <div className="form-group">
                                         <label>Ref Personal</label>
@@ -501,9 +511,10 @@ const PersonalPage = () => {
                                         <input type="date" className="form-control" value={formData.BAJA?.split('T')[0] || ''} onChange={e => setFormData({ ...formData, BAJA: e.target.value })} />
                                     </div>
                                 </div>
-                                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem', padding: '0.8rem' }}>
+                                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem', padding: '0.8rem' }} disabled={!canManage}>
                                     {editingItem ? 'Actualizar Registro' : 'Crear Registro'}
                                 </button>
+                                </fieldset>
                             </form>
                         </motion.div>
                     </div>

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef, useMemo, createPortal } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Upload, Calendar, AlertTriangle, CheckCircle2, Trash2, Filter, 

@@ -64,24 +64,8 @@ function App() {
     );
   }
 
-  // Auth error (email not in APP_USUARIOS)
-  if (authError) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-dark)', padding: '2rem' }}>
-        <div className="glass-card" style={{ padding: '2.5rem', maxWidth: '480px', width: '100%', textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.75rem', color: '#fca5a5' }}>Acceso denegado</h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>{authError}</p>
-          <button className="btn btn-primary" onClick={handleLogout} style={{ width: '100%', justifyContent: 'center' }}>
-            Volver al inicio de sesión
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (!isAuthenticated) {
-    return <LoginPage onLogin={() => {}} />;
+    return <LoginPage onLogin={() => {}} authError={authError} />;
   }
 
   const isExpanded = isSidebarPinned || isHovered;

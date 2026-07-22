@@ -3,11 +3,12 @@ import { motion } from 'framer-motion';
 import logo from '../assets/tragsa_logo.png';
 import { supabase } from '../supabaseClient';
 
-const LoginPage = ({ onLogin }) => {
+const LoginPage = ({ onLogin, authError }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const displayError = error || authError || '';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -66,7 +67,7 @@ const LoginPage = ({ onLogin }) => {
 
                 <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: '500' }}>Iniciar Sesión</h2>
 
-                {error && (
+                {displayError && (
                     <div style={{
                         background: 'rgba(239, 68, 68, 0.2)',
                         color: '#fca5a5',
@@ -77,7 +78,7 @@ const LoginPage = ({ onLogin }) => {
                         fontSize: '0.85rem',
                         textAlign: 'center'
                     }}>
-                        <div>{error}</div>
+                        <div>{displayError}</div>
                     </div>
                 )}
 

@@ -5,7 +5,43 @@ import api from '../api';
 
 const PERFILES = ['Administrador', 'Consulta'];
 
-const initialForm = { NOMBRE: '', APELLIDO1: '', APELLIDO2: '', PERFIL: 'Consulta', EMAIL: '' };
+const initialForm = {
+    NOMBRE: '',
+    APELLIDO1: '',
+    APELLIDO2: '',
+    PERFIL: 'Consulta',
+    EMAIL: '',
+    PERSONAL: true,
+    PRESENCIA: false,
+    TERCIO: false,
+};
+
+const parseBool = (val) => {
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'string') {
+        const normalized = val.trim().toLowerCase();
+        return ['true', '1', 'si', 's', 'yes', 'y'].includes(normalized);
+    }
+    return Boolean(val);
+};
+
+const renderFlag = (val) => {
+    const isTrue = parseBool(val);
+    return (
+        <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0.15rem 0.5rem',
+            borderRadius: '12px',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            background: isTrue ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.12)',
+            color: isTrue ? '#34d399' : '#94a3b8',
+        }}>
+            {isTrue ? 'Sí' : 'No'}
+        </span>
+    );
+};
 
 const UsuariosPage = () => {
     const [users, setUsers] = useState([]);
@@ -44,6 +80,9 @@ const UsuariosPage = () => {
             APELLIDO2: user.APELLIDO2 || '',
             PERFIL: user.PERFIL || 'Consulta',
             EMAIL: user.EMAIL || '',
+            PERSONAL: parseBool(user.PERSONAL),
+            PRESENCIA: parseBool(user.PRESENCIA),
+            TERCIO: parseBool(user.TERCIO),
         });
         setIsModalOpen(true);
     };
@@ -134,6 +173,9 @@ const UsuariosPage = () => {
                                 <th>Apellidos</th>
                                 <th>Perfil</th>
                                 <th>Email (login)</th>
+                                <th style={{ textAlign: 'center' }}>Personal</th>
+                                <th style={{ textAlign: 'center' }}>Presencia</th>
+                                <th style={{ textAlign: 'center' }}>Tercio</th>
                                 <th style={{ width: '120px', textAlign: 'center' }}>Acciones</th>
                             </tr>
                         </thead>
@@ -157,6 +199,9 @@ const UsuariosPage = () => {
                                         </span>
                                     </td>
                                     <td style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>{user.EMAIL}</td>
+                                    <td style={{ textAlign: 'center' }}>{renderFlag(user.PERSONAL)}</td>
+                                    <td style={{ textAlign: 'center' }}>{renderFlag(user.PRESENCIA)}</td>
+                                    <td style={{ textAlign: 'center' }}>{renderFlag(user.TERCIO)}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
                                             <button
@@ -256,7 +301,7 @@ const UsuariosPage = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                                <div className="form-group" style={{ marginBottom: '1rem' }}>
                                     <label style={{ fontSize: '0.8rem' }}>Email (debe coincidir con el email de login) *</label>
                                     <input
                                         className="form-control"
@@ -267,6 +312,49 @@ const UsuariosPage = () => {
                                         required
                                     />
                                 </div>
+
+                                {/* Acceso a Módulos */}
+                                <div style={{
+                                    marginBottom: '1.5rem',
+                                    background: 'rgba(255, 255, 255, 0.03)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: '8px',
+                                    padding: '0.9rem 1rem'
+                                }}>
+                                    <label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '0.6rem', color: 'var(--text-muted)' }}>
+                                        Acceso a Módulos
+                                    </label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(formData.PERSONAL)}
+                                                onChange={e => setFormData(p => ({ ...p, PERSONAL: e.target.checked }))}
+                                                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                            />
+                                            Personal
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(formData.PRESENCIA)}
+                                                onChange={e => setFormData(p => ({ ...p, PRESENCIA: e.target.checked }))}
+                                                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                            />
+                                            Presencia
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(formData.TERCIO)}
+                                                onChange={e => setFormData(p => ({ ...p, TERCIO: e.target.checked }))}
+                                                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                            />
+                                            Tercio
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                                     <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>
                                         Cancelar
@@ -285,3 +373,4 @@ const UsuariosPage = () => {
 };
 
 export default UsuariosPage;
+

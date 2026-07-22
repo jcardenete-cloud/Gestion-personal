@@ -26,6 +26,18 @@ export const AuthProvider = ({ children }) => {
         setIsReadOnly(!admin);
     }, []);
 
+    const isAuthorizedAppUser = useCallback((user) => {
+        if (!user) return false;
+
+        const value = user.PERSONAL;
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            return ['true', '1', 'si', 's', 'yes', 'y'].includes(normalized);
+        }
+        return Boolean(value);
+    }, []);
+
     const loadAppUser = useCallback(async (email) => {
         if (!email) {
             setIsAuthenticated(false);
@@ -40,10 +52,8 @@ export const AuthProvider = ({ children }) => {
 
         try {
             const { data: user } = await api.getAppUsuarioByEmail(email);
-            if (!user) {
-                setAuthError(
-                    `El email "${email}" no tiene acceso a esta aplicación. Contacte con el administrador.`
-                );
+            if (!user || !isAuthorizedAppUser(user)) {
+                setAuthError('No está autorizado a esta aplicación');
                 await supabase.auth.signOut();
                 setIsAuthenticated(false);
                 applyUserRole(null);
@@ -60,7 +70,7 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setAuthLoading(false);
         }
-    }, [applyUserRole]);
+    }, [applyUserRole, isAuthorizedAppUser]);
 
     useEffect(() => {
         // Check initial session

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import api from '../api';
 import { MapPin, Search } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 const PersonalByLocationPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [locations, setLocations] = useState([]);
     const [personal, setPersonal] = useState([]);
     const [selectedLocation, setSelectedLocation] = useState('');
@@ -60,12 +63,14 @@ const PersonalByLocationPage = () => {
     }, [selectedLocation, personal]);
 
     const toggleSelectPerson = (id) => {
+        if (!canManage) return;
         setSelectedPeople(prev =>
             prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
         );
     };
 
     const handleSelectAll = (e) => {
+        if (!canManage) return;
         if (e.target.checked) {
             setSelectedPeople(filteredPersonal.map(p => p.REF_PER));
         } else {
@@ -74,6 +79,7 @@ const PersonalByLocationPage = () => {
     };
 
     const handleMove = async () => {
+        if (!canManage) return;
         if (!targetLocation) {
             alert("Por favor, seleccione una ubicación de destino.");
             return;
@@ -144,6 +150,12 @@ const PersonalByLocationPage = () => {
                         </span>
                     </h3>
 
+                    {!canManage && (
+                        <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                            No tienes permisos para modificar la ubicación del personal.
+                        </div>
+                    )}
+
                     {filteredPersonal.length > 0 ? (
                         <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border-card)' }}>
@@ -158,7 +170,7 @@ const PersonalByLocationPage = () => {
                                         value={targetLocation}
                                         onChange={(e) => setTargetLocation(e.target.value)}
                                         style={{ height: '42px', fontSize: '0.9rem' }}
-                                        disabled={selectedPeople.length === 0 || isMoving}
+                                        disabled={!canManage || selectedPeople.length === 0 || isMoving}
                                     >
                                         <option value="">-- Seleccionar destino --</option>
                                         {locations
@@ -173,7 +185,7 @@ const PersonalByLocationPage = () => {
                                 <button
                                     className="btn btn-primary"
                                     onClick={handleMove}
-                                    disabled={!targetLocation || selectedPeople.length === 0 || isMoving}
+                                    disabled={!canManage || !targetLocation || selectedPeople.length === 0 || isMoving}
                                     style={{ height: '42px', padding: '0 1.5rem' }}
                                 >
                                     {isMoving ? 'Moviendo...' : 'Cambiar Ubicación'}
@@ -187,7 +199,8 @@ const PersonalByLocationPage = () => {
                                             <input
                                                 type="checkbox"
                                                 onChange={handleSelectAll}
-                                                checked={selectedPeople.length === filteredPersonal.length && filteredPersonal.length > 0}
+                                                checked={canManage && selectedPeople.length === filteredPersonal.length && filteredPersonal.length > 0}
+                                                disabled={!canManage}
                                             />
                                         </th>
                                         <th>Apellidos</th>
@@ -204,12 +217,13 @@ const PersonalByLocationPage = () => {
                                                     type="checkbox"
                                                     checked={selectedPeople.includes(p.REF_PER)}
                                                     onChange={() => toggleSelectPerson(p.REF_PER)}
+                                                    disabled={!canManage}
                                                 />
                                             </td>
-                                            <td onClick={() => toggleSelectPerson(p.REF_PER)} style={{ cursor: 'pointer' }}>{p.APELLIDO1} {p.APELLIDO2}</td>
-                                            <td onClick={() => toggleSelectPerson(p.REF_PER)} style={{ cursor: 'pointer' }}>{p.NOMBRE}</td>
-                                            <td onClick={() => toggleSelectPerson(p.REF_PER)} style={{ cursor: 'pointer' }}>{p.PERFIL}</td>
-                                            <td onClick={() => toggleSelectPerson(p.REF_PER)} style={{ cursor: 'pointer' }}>{p.USUARIO}</td>
+                                            <td onClick={() => canManage && toggleSelectPerson(p.REF_PER)} style={{ cursor: canManage ? 'pointer' : 'default' }}>{p.APELLIDO1} {p.APELLIDO2}</td>
+                                            <td onClick={() => canManage && toggleSelectPerson(p.REF_PER)} style={{ cursor: canManage ? 'pointer' : 'default' }}>{p.NOMBRE}</td>
+                                            <td onClick={() => canManage && toggleSelectPerson(p.REF_PER)} style={{ cursor: canManage ? 'pointer' : 'default' }}>{p.PERFIL}</td>
+                                            <td onClick={() => canManage && toggleSelectPerson(p.REF_PER)} style={{ cursor: canManage ? 'pointer' : 'default' }}>{p.USUARIO}</td>
                                         </tr>
                                     ))}
                                 </tbody>

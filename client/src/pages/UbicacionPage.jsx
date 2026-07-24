@@ -3,8 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString } from '../utils';
+import { useAuth } from '../AuthContext';
 
 const UbicacionPage = () => {
+    const { isReadOnly } = useAuth();
+    const canManage = !isReadOnly;
     const [data, setData] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -93,6 +96,7 @@ const UbicacionPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canManage) return;
         try {
             if (editingItem) {
                 await api.updateUbicacion(formData);
@@ -110,12 +114,14 @@ const UbicacionPage = () => {
     };
 
     const handleEdit = (item) => {
+        if (!canManage) return;
         setEditingItem(item);
         setFormData(item);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id) => {
+        if (!canManage) return;
         if (window.confirm("¿Seguro que desea eliminar esta ubicación?")) {
             try {
                 await api.deleteUbicacion(id);
@@ -130,9 +136,11 @@ const UbicacionPage = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem' }}>Gestión de Ubicaciones</h2>
-                <button className="btn btn-primary" onClick={() => { setEditingItem(null); setFormData({ REF_UBI: '', A_LUGAR: '' }); setIsModalOpen(true); }}>
-                    <Plus size={20} /> Nueva Ubicación
-                </button>
+                {canManage && (
+                    <button className="btn btn-primary" onClick={() => { setEditingItem(null); setFormData({ REF_UBI: '', A_LUGAR: '' }); setIsModalOpen(true); }}>
+                        <Plus size={20} /> Nueva Ubicación
+                    </button>
+                )}
             </div>
 
             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -195,7 +203,7 @@ const UbicacionPage = () => {
                                     </div>
                                 </th>
                             ))}
-                            <th style={{ width: '100px' }}>Acciones</th>
+                            {canManage && <th style={{ width: '100px' }}>Acciones</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -203,16 +211,18 @@ const UbicacionPage = () => {
                             <tr key={item.REF_UBI}>
                                 {visibleColumns.includes('REF_UBI') && <td>{item.REF_UBI}</td>}
                                 {visibleColumns.includes('A_LUGAR') && <td>{item.A_LUGAR}</td>}
-                                <td>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button className="btn" style={{ padding: '0.5rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => handleEdit(item)}>
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button className="btn" style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={() => handleDelete(item.REF_UBI)}>
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </td>
+                                {canManage && (
+                                    <td>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <button className="btn" style={{ padding: '0.5rem', background: 'rgba(99, 102, 241, 0.2)' }} onClick={() => handleEdit(item)}>
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button className="btn" style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)' }} onClick={() => handleDelete(item.REF_UBI)}>
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                     </tbody>
@@ -287,29 +297,37 @@ const UbicacionPage = () => {
                                 <h3>{editingItem ? 'Editar Ubicación' : 'Nueva Ubicación'}</h3>
                                 <X size={24} style={{ cursor: 'pointer' }} onClick={() => setIsModalOpen(false)} />
                             </div>
+                            {!canManage && (
+                                <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                                    No tienes permisos para modificar ubicaciones.
+                                </div>
+                            )}
                             <form onSubmit={handleSubmit}>
-                                <div className="form-group">
-                                    <label>Referencia (Ref Ubi)</label>
-                                    <input
-                                        className="form-control"
-                                        value={formData.REF_UBI}
-                                        onChange={e => setFormData({ ...formData, REF_UBI: e.target.value })}
-                                        disabled={!!editingItem}
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Lugar</label>
-                                    <input
-                                        className="form-control"
-                                        value={formData.A_LUGAR}
-                                        onChange={e => setFormData({ ...formData, A_LUGAR: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-                                    {editingItem ? 'Actualizar' : 'Crear'}
-                                </button>
+                                <fieldset disabled={!canManage} style={{ border: 'none', margin: 0, padding: 0 }}>
+                                    <div className="form-group">
+                                        <label>Referencia (Ref Ubi)</label>
+                                        <input
+                                            className="form-control"
+                                            value={formData.REF_UBI}
+                                            onChange={e => setFormData({ ...formData, REF_UBI: e.target.value })}
+                                            disabled={!!editingItem || !canManage}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Lugar</label>
+                                        <input
+                                            className="form-control"
+                                            value={formData.A_LUGAR}
+                                            onChange={e => setFormData({ ...formData, A_LUGAR: e.target.value })}
+                                            disabled={!canManage}
+                                            required
+                                        />
+                                    </div>
+                                    <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={!canManage}>
+                                        {editingItem ? 'Actualizar' : 'Crear'}
+                                    </button>
+                                </fieldset>
                             </form>
                         </motion.div>
                     </div>

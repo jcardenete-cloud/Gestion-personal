@@ -88,6 +88,92 @@ const VacacionesPage = () => {
         ORIGEN_FICHERO: ''
     });
     const currentYear = new Date().getFullYear().toString();
+
+    // Add manual vacation state
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newVacationData, setNewVacationData] = useState({
+        REF_PER: '',
+        PARTICION_NUM: '1',
+        DURACION: '',
+        FECHA_DESDE: '',
+        FECHA_HASTA: '',
+        ORIGEN_FICHERO: 'Carga manual'
+    });
+    const [addLoading, setAddLoading] = useState(false);
+
+    const handleNewVacationDateChange = (field, val) => {
+        setNewVacationData(prev => {
+            const updated = { ...prev, [field]: val };
+            if (updated.FECHA_DESDE && updated.FECHA_HASTA && updated.REF_PER) {
+                const start = new Date(updated.FECHA_DESDE);
+                const end = new Date(updated.FECHA_HASTA);
+                if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+                    const employee = personalList.find(p => p.REF_PER === parseInt(updated.REF_PER));
+                    const personFestivos = employee?.REF_UBI != null
+                        ? new Set([...nationalFestivos, ...(festivosByRef[employee.REF_UBI] || [])])
+                        : nationalFestivos;
+                    
+                    let count = 0;
+                    const curDate = new Date(start.getTime());
+                    while (curDate <= end) {
+                        const dayOfWeek = curDate.getDay();
+                        const dateStr = curDate.toISOString().split('T')[0];
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !personFestivos.has(dateStr)) {
+                            count++;
+                        }
+                        curDate.setDate(curDate.getDate() + 1);
+                    }
+                    updated.DURACION = String(count);
+                }
+            }
+            return updated;
+        });
+    };
+
+    const handleAddVacation = async (e) => {
+        e.preventDefault();
+        if (!canManage) {
+            alert('No tienes permisos para modificar vacaciones.');
+            return;
+        }
+        if (!newVacationData.REF_PER) {
+            alert('Por favor, selecciona un empleado.');
+            return;
+        }
+        if (!newVacationData.FECHA_DESDE || !newVacationData.FECHA_HASTA) {
+            alert('Por favor, introduce las fechas.');
+            return;
+        }
+        
+        setAddLoading(true);
+        try {
+            const payload = [{
+                ref_per: parseInt(newVacationData.REF_PER),
+                duracion: newVacationData.DURACION ? parseFloat(newVacationData.DURACION) : null,
+                fecha_desde: newVacationData.FECHA_DESDE,
+                fecha_hasta: newVacationData.FECHA_HASTA,
+                particion_num: newVacationData.PARTICION_NUM ? parseInt(newVacationData.PARTICION_NUM) : null,
+                origen_fichero: newVacationData.ORIGEN_FICHERO || 'Carga manual'
+            }];
+            
+            await api.importVacaciones(payload);
+            setIsAddModalOpen(false);
+            setNewVacationData({
+                REF_PER: '',
+                PARTICION_NUM: '1',
+                DURACION: '',
+                FECHA_DESDE: '',
+                FECHA_HASTA: '',
+                ORIGEN_FICHERO: 'Carga manual'
+            });
+            loadHistory();
+            alert('Partición de vacaciones creada correctamente.');
+        } catch (err) {
+            alert("Error al insertar vacaciones: " + (err.response?.data?.error || err.message));
+        } finally {
+            setAddLoading(false);
+        }
+    };
     
     // Ref for file input
     const fileInputRef = useRef(null);
@@ -2033,9 +2119,25 @@ const VacacionesPage = () => {
                                         </FloatingSuggestionList>
                                     )}
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
+                                    {canManage && (
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => setIsAddModalOpen(true)}
+                                            style={{
+                                                height: '34px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                fontSize: '0.85rem',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            <Plus size={14} /> Insertar Partición
+                                        </button>
+                                    )}
                                     <button
-                                        className="btn btn-primary"
+                                        className="btn"
                                         onClick={handleExportHistory}
                                         disabled={sortedHistory.length === 0}
                                         title="Exportar registros filtrados a Excel"
@@ -2046,7 +2148,10 @@ const VacacionesPage = () => {
                                             gap: '0.4rem',
                                             fontSize: '0.85rem',
                                             whiteSpace: 'nowrap',
-                                            opacity: sortedHistory.length === 0 ? 0.5 : 1
+                                            opacity: sortedHistory.length === 0 ? 0.5 : 1,
+                                            background: 'rgba(255,255,255,0.08)',
+                                            border: '1px solid var(--border-card)',
+                                            color: 'var(--text-main)'
                                         }}
                                     >
                                         <Download size={14} /> Exportar Excel
@@ -3089,6 +3194,128 @@ const VacacionesPage = () => {
                         )}
                     </motion.div>
                 ) : null}
+            </AnimatePresence>
+
+            {/* Modal para insertar partición de vacaciones */}
+            <AnimatePresence>
+                {isAddModalOpen && (
+                    <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="glass-card" style={{ width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Insertar Partición de Vacaciones</h3>
+                                <X size={24} style={{ cursor: 'pointer' }} onClick={() => setIsAddModalOpen(false)} />
+                            </div>
+                            {!canManage && (
+                                <div style={{ marginBottom: '1rem', color: '#fbbf24', fontSize: '0.9rem' }}>
+                                    No tienes permisos para modificar vacaciones.
+                                </div>
+                            )}
+                            <form onSubmit={handleAddVacation}>
+                                <fieldset disabled={!canManage} style={{ border: 'none', margin: 0, padding: 0 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                                        <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Empleado</label>
+                                            <select 
+                                                className="form-control" 
+                                                value={newVacationData.REF_PER} 
+                                                onChange={e => handleNewVacationDateChange('REF_PER', e.target.value)} 
+                                                required
+                                            >
+                                                <option value="">-- Selecciona un empleado --</option>
+                                                {activePersonalList.map(p => (
+                                                    <option key={p.REF_PER} value={p.REF_PER}>
+                                                        {p.APELLIDO1} {p.APELLIDO2}, {p.NOMBRE} ({p.USUARIO?.split('@')[0]})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Partición</label>
+                                            <select 
+                                                className="form-control" 
+                                                value={newVacationData.PARTICION_NUM} 
+                                                onChange={e => setNewVacationData(prev => ({ ...prev, PARTICION_NUM: e.target.value }))}
+                                                required
+                                            >
+                                                <option value="1">Partición 1</option>
+                                                <option value="2">Partición 2</option>
+                                                <option value="3">Partición 3</option>
+                                                <option value="4">Partición 4</option>
+                                                <option value="5">Partición 5</option>
+                                                <option value="6">Partición 6</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Días Laborables (Duración)</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-control" 
+                                                value={newVacationData.DURACION} 
+                                                onChange={e => setNewVacationData(prev => ({ ...prev, DURACION: e.target.value }))}
+                                                required
+                                                min="0.5"
+                                                step="0.5"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Fecha Desde</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-control" 
+                                                value={newVacationData.FECHA_DESDE} 
+                                                onChange={e => handleNewVacationDateChange('FECHA_DESDE', e.target.value)}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Fecha Hasta</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-control" 
+                                                value={newVacationData.FECHA_HASTA} 
+                                                onChange={e => handleNewVacationDateChange('FECHA_HASTA', e.target.value)}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Origen / Archivo</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                value={newVacationData.ORIGEN_FICHERO} 
+                                                onChange={e => setNewVacationData(prev => ({ ...prev, ORIGEN_FICHERO: e.target.value }))}
+                                                placeholder="Carga manual"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                                        <button 
+                                            type="button" 
+                                            className="btn" 
+                                            onClick={() => setIsAddModalOpen(false)}
+                                            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-card)', color: 'var(--text-main)' }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            className="btn btn-primary"
+                                            disabled={addLoading}
+                                        >
+                                            {addLoading ? 'Guardando...' : 'Crear Partición'}
+                                        </button>
+                                    </div>
+                                </fieldset>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
             </AnimatePresence>
         </motion.div>
     );

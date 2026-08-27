@@ -101,29 +101,62 @@ const VacacionesPage = () => {
     });
     const [addLoading, setAddLoading] = useState(false);
 
+    // Helper: formats a Date as local YYYY-MM-DD (avoids UTC offset issues with toISOString()).
+    const toLocalIso = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    // Helper: calculates the number of working days (Mon–Fri) in a date range,
+    // excluding festivos from the DB and auto-detected puentes:
+    //   - Festivo on Tuesday  → Monday is puente (bridge)
+    //   - Festivo on Thursday → Friday is puente (bridge)
+    const calcWorkingDays = (desde, hasta, employee) => {
+        if (!desde || !hasta) return null;
+        const start = new Date(`${desde}T00:00:00`);
+        const end = new Date(`${hasta}T00:00:00`);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return null;
+
+        const personFestivos = (employee?.REF_UBI != null)
+            ? new Set([...nationalFestivos, ...(festivosByRef[employee.REF_UBI] || [])])
+            : new Set(nationalFestivos);
+
+        let count = 0;
+        const cur = new Date(start.getTime());
+        while (cur <= end) {
+            const dow = cur.getDay();
+            const iso = toLocalIso(cur);
+            if (dow !== 0 && dow !== 6 && !personFestivos.has(iso)) {
+                // Working day candidate — check if it's a puente
+                let isBridge = false;
+                if (dow === 1) {
+                    // Monday: puente if Tuesday is festivo
+                    const tue = new Date(cur);
+                    tue.setDate(tue.getDate() + 1);
+                    isBridge = personFestivos.has(toLocalIso(tue));
+                } else if (dow === 5) {
+                    // Friday: puente if Thursday is festivo
+                    const thu = new Date(cur);
+                    thu.setDate(thu.getDate() - 1);
+                    isBridge = personFestivos.has(toLocalIso(thu));
+                }
+                if (!isBridge) count++;
+            }
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    };
+
     const handleNewVacationDateChange = (field, val) => {
         setNewVacationData(prev => {
             const updated = { ...prev, [field]: val };
             if (updated.FECHA_DESDE && updated.FECHA_HASTA && updated.REF_PER) {
-                const start = new Date(updated.FECHA_DESDE);
-                const end = new Date(updated.FECHA_HASTA);
-                if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
-                    const employee = personalList.find(p => p.REF_PER === parseInt(updated.REF_PER));
-                    const personFestivos = employee?.REF_UBI != null
-                        ? new Set([...nationalFestivos, ...(festivosByRef[employee.REF_UBI] || [])])
-                        : nationalFestivos;
-                    
-                    let count = 0;
-                    const curDate = new Date(start.getTime());
-                    while (curDate <= end) {
-                        const dayOfWeek = curDate.getDay();
-                        const dateStr = curDate.toISOString().split('T')[0];
-                        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !personFestivos.has(dateStr)) {
-                            count++;
-                        }
-                        curDate.setDate(curDate.getDate() + 1);
-                    }
-                    updated.DURACION = String(count);
+                const employee = personalList.find(p => p.REF_PER === parseInt(updated.REF_PER));
+                const days = calcWorkingDays(updated.FECHA_DESDE, updated.FECHA_HASTA, employee);
+                if (days !== null) {
+                    updated.DURACION = String(days);
                 }
             }
             return updated;
@@ -1094,33 +1127,6 @@ const VacacionesPage = () => {
         }
         
         return valStr;
-    };
-
-    // Helper: calculates the number of working days (Mon-Fri, excluding festivos).
-    // NOTE: Bridge days (puentes) are already stored in the DB as festivos, so no
-    // additional bridge-detection logic is needed here.
-    const calcWorkingDays = (desde, hasta, employee) => {
-        if (!desde || !hasta) return null;
-        const start = new Date(`${desde}T00:00:00`);
-        const end = new Date(`${hasta}T00:00:00`);
-        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return null;
-
-        const personFestivos = (employee?.REF_UBI != null)
-            ? new Set([...nationalFestivos, ...(festivosByRef[employee.REF_UBI] || [])])
-            : new Set(nationalFestivos);
-
-        let count = 0;
-        const cur = new Date(start.getTime());
-        while (cur <= end) {
-            const dow = cur.getDay();
-            const iso = cur.toISOString().split('T')[0];
-            // Count day only if Mon–Fri and not a festivo/puente stored in DB
-            if (dow !== 0 && dow !== 6 && !personFestivos.has(iso)) {
-                count++;
-            }
-            cur.setDate(cur.getDate() + 1);
-        }
-        return count;
     };
 
     // Excel Parsing Handler

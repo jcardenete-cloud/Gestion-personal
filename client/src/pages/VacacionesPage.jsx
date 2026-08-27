@@ -1096,7 +1096,42 @@ const VacacionesPage = () => {
         return valStr;
     };
 
-    // Excel Parsing Handler
+    // Helper: calculates the number of working days (Mon-Fri, excluding festivos and bridges) in a date range
+    const calcWorkingDays = (desde, hasta, employee) => {
+        if (!desde || !hasta) return null;
+        const start = new Date(`${desde}T00:00:00`);
+        const end = new Date(`${hasta}T00:00:00`);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return null;
+
+        const personFestivos = (employee?.REF_UBI != null)
+            ? new Set([...nationalFestivos, ...(festivosByRef[employee.REF_UBI] || [])])
+            : new Set(nationalFestivos);
+
+        let count = 0;
+        const cur = new Date(start.getTime());
+        while (cur <= end) {
+            const dow = cur.getDay();
+            const iso = cur.toISOString().split('T')[0];
+            if (dow !== 0 && dow !== 6) {
+                // Not weekend
+                if (!personFestivos.has(iso)) {
+                    // Not festivo — check bridge (puente)
+                    let isBridge = false;
+                    if (dow === 1) { // Monday: bridge if Tuesday is festivo
+                        const tue = new Date(cur); tue.setDate(tue.getDate() + 1);
+                        isBridge = personFestivos.has(tue.toISOString().split('T')[0]);
+                    } else if (dow === 5) { // Friday: bridge if Thursday is festivo
+                        const thu = new Date(cur); thu.setDate(thu.getDate() - 1);
+                        isBridge = personFestivos.has(thu.toISOString().split('T')[0]);
+                    }
+                    if (!isBridge) count++;
+                }
+            }
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    };
+
     // Excel Parsing Handler
     const handleFile = (file) => {
         if (!canManage) {
@@ -1174,6 +1209,7 @@ const VacacionesPage = () => {
                         let status = 'valid';
                         let statusText = 'Listo';
                         let refPer = matchedEmp ? matchedEmp.REF_PER : null;
+                        let calculatedDays = null;
 
                         if (!matchedEmp) {
                             status = 'error_user';
@@ -1181,6 +1217,13 @@ const VacacionesPage = () => {
                         } else if (!parsedDesde || !parsedHasta) {
                             status = 'error_dates';
                             statusText = 'Fechas inválidas';
+                        } else {
+                            // Validate that the declared days match the actual working days in the period
+                            calculatedDays = calcWorkingDays(parsedDesde, parsedHasta, matchedEmp);
+                            if (calculatedDays !== null && typeof days === 'number' && days !== calculatedDays) {
+                                status = 'warning_days';
+                                statusText = `Días no coinciden (Excel: ${days}, calculado: ${calculatedDays})`;
+                            }
                         }
 
                         rows.push({
@@ -1191,6 +1234,7 @@ const VacacionesPage = () => {
                             refPer,
                             partition: p + 1,
                             days,
+                            calculatedDays,
                             desde: parsedDesde,
                             hasta: parsedHasta,
                             desdeRaw: (desdeVal instanceof Date) ? (isNaN(desdeVal.getTime()) ? 'Fecha inválida' : desdeVal.toLocaleDateString()) : String(desdeVal || ''),
@@ -1239,15 +1283,22 @@ const VacacionesPage = () => {
         const emp = personalList.find(p => p.REF_PER === parseInt(empId));
         setExcelRows(prev => prev.map(row => {
             if (row.id === rowId) {
-                const newStatus = (!row.desde || !row.hasta) ? 'error_dates' : 'valid';
-                const newStatusText = newStatus === 'valid' ? 'Listo' : 'Fechas inválidas';
-                return {
-                    ...row,
-                    employee: emp,
-                    refPer: emp ? emp.REF_PER : null,
-                    status: emp ? newStatus : 'error_user',
-                    statusText: emp ? newStatusText : 'Usuario no encontrado'
-                };
+                if (!emp) {
+                    return { ...row, employee: null, refPer: null, status: 'error_user', statusText: 'Usuario no encontrado', calculatedDays: null };
+                }
+                if (!row.desde || !row.hasta) {
+                    return { ...row, employee: emp, refPer: emp.REF_PER, status: 'error_dates', statusText: 'Fechas inválidas', calculatedDays: null };
+                }
+                // Recalculate working days with the new employee (festivos may differ by location)
+                const newCalcDays = calcWorkingDays(row.desde, row.hasta, emp);
+                const daysNum = typeof row.days === 'number' ? row.days : null;
+                let newStatus = 'valid';
+                let newStatusText = 'Listo';
+                if (newCalcDays !== null && daysNum !== null && daysNum !== newCalcDays) {
+                    newStatus = 'warning_days';
+                    newStatusText = `Días no coinciden (Excel: ${daysNum}, calculado: ${newCalcDays})`;
+                }
+                return { ...row, employee: emp, refPer: emp.REF_PER, status: newStatus, statusText: newStatusText, calculatedDays: newCalcDays };
             }
             return row;
         }));
@@ -1259,10 +1310,19 @@ const VacacionesPage = () => {
             alert('No tienes permisos para modificar vacaciones.');
             return;
         }
-        const validRows = excelRows.filter(r => r.status === 'valid');
+        const validRows = excelRows.filter(r => r.status === 'valid' || r.status === 'warning_days');
         if (validRows.length === 0) {
             alert("No hay registros válidos para importar.");
             return;
+        }
+        const warningRows = excelRows.filter(r => r.status === 'warning_days');
+        if (warningRows.length > 0) {
+            const proceed = window.confirm(
+                `⚠️ Atención: ${warningRows.length} partición(es) tienen discrepancias en el número de días laborables.\n\n` +
+                `Puedes importarlas igualmente (se usará el valor del Excel), pero te recomendamos revisarlas primero.\n\n` +
+                `¿Deseas continuar con la importación de todos los registros válidos y con advertencias?`
+            );
+            if (!proceed) return;
         }
         
         setImportLoading(true);
@@ -1846,7 +1906,7 @@ const VacacionesPage = () => {
                                     <div>
                                         <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Previsualización de Datos Extraídos</h3>
                                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            Revisa los periodos detectados. Las filas en rojo no tienen usuario asignado; puedes resolverlo con el selector.
+                                            Revisa los periodos detectados. Las filas en <strong style={{color:'#f87171'}}>rojo</strong> tienen errores bloqueantes; las de <strong style={{color:'#f59e0b'}}>naranja</strong> presentan discrepancias en días laborables y requieren revisión antes de grabar.
                                         </p>
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.8rem' }}>
@@ -1859,15 +1919,35 @@ const VacacionesPage = () => {
                                         </button>
                                         <button 
                                             className="btn btn-primary" 
-                                            disabled={importLoading || excelRows.filter(r => r.status === 'valid').length === 0}
+                                            disabled={importLoading || excelRows.filter(r => r.status === 'valid' || r.status === 'warning_days').length === 0}
                                             onClick={handleSaveImport}
                                             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                                         >
                                             <Upload size={16} />
-                                            {importLoading ? 'Cargando...' : `Confirmar e Importar (${excelRows.filter(r => r.status === 'valid').length} filas)`}
+                                            {importLoading ? 'Cargando...' : `Confirmar e Importar (${excelRows.filter(r => r.status === 'valid' || r.status === 'warning_days').length} filas)`}
                                         </button>
                                     </div>
                                 </div>
+                                {/* Warning banner if there are day-count discrepancies */}
+                                {excelRows.some(r => r.status === 'warning_days') && (
+                                    <div style={{
+                                        display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                                        padding: '0.85rem 1.1rem', marginBottom: '1rem',
+                                        background: 'rgba(245, 158, 11, 0.1)',
+                                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                                        borderRadius: '10px', fontSize: '0.82rem'
+                                    }}>
+                                        <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '0.1rem' }} />
+                                        <div>
+                                            <strong style={{ color: '#f59e0b' }}>
+                                                {excelRows.filter(r => r.status === 'warning_days').length} partición(es) con discrepancia en días laborables
+                                            </strong>
+                                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.4rem' }}>
+                                                — Los días solicitados en el Excel no coinciden con los días laborables calculados (descontando fines de semana, festivos y puentes). Revisa y corrige antes de importar.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="glass-card" style={{ overflowX: 'auto', marginBottom: '2rem' }}>
                                     <table>
@@ -1877,18 +1957,25 @@ const VacacionesPage = () => {
                                                 <th>Usuario Excel</th>
                                                 <th>Empleado Asociado (Base de Datos)</th>
                                                 <th style={{ width: '80px', textAlign: 'center' }}>Partición</th>
-                                                <th style={{ width: '80px', textAlign: 'center' }}>Días Laborables</th>
+                                                <th style={{ width: '110px', textAlign: 'center' }}>Días (Excel)</th>
+                                                <th style={{ width: '110px', textAlign: 'center' }}>Días Laborables Calculados</th>
                                                 <th>Desde</th>
                                                 <th>Hasta</th>
                                                 <th style={{ width: '180px' }}>Estado</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {excelRows.map((row) => (
-                                                <tr key={row.id} style={{ 
-                                                    background: row.status === 'error_user' ? 'rgba(239, 68, 68, 0.03)' : 
-                                                                row.status === 'error_dates' ? 'rgba(245, 158, 11, 0.03)' : 'none'
-                                                }}>
+                                            {excelRows.map((row) => {
+                                                const isWarningDays = row.status === 'warning_days';
+                                                const isErrorUser = row.status === 'error_user';
+                                                const isErrorDates = row.status === 'error_dates';
+                                                const rowBg =
+                                                    isErrorUser ? 'rgba(239, 68, 68, 0.06)' :
+                                                    isErrorDates ? 'rgba(245, 158, 11, 0.06)' :
+                                                    isWarningDays ? 'rgba(245, 158, 11, 0.04)' : 'none';
+                                                const rowBorder = isWarningDays ? '1px solid rgba(245, 158, 11, 0.25)' : undefined;
+                                                return (
+                                                <tr key={row.id} style={{ background: rowBg, outline: rowBorder ? rowBorder : undefined }}>
                                                     <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.excelRow}</td>
                                                     <td>
                                                         <span style={{ 
@@ -1902,7 +1989,7 @@ const VacacionesPage = () => {
                                                         </span>
                                                     </td>
                                                     <td>
-                                                        {row.status === 'error_user' ? (
+                                                        {isErrorUser ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                 <select
                                                                     className="form-control"
@@ -1932,8 +2019,24 @@ const VacacionesPage = () => {
                                                         )}
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontWeight: 700 }}>P{row.partition}</td>
-                                                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                    {/* Days from Excel — highlighted red if mismatch */}
+                                                    <td style={{ textAlign: 'center', fontWeight: 700,
+                                                        color: isWarningDays ? '#f59e0b' : undefined }}>
                                                         {row.days !== null ? row.days : '-'}
+                                                        {isWarningDays && (
+                                                            <span title={row.statusText}
+                                                                style={{ marginLeft: '0.3rem', cursor: 'help' }}>
+                                                                ⚠️
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    {/* Calculated working days */}
+                                                    <td style={{ textAlign: 'center', fontWeight: 600,
+                                                        color: isWarningDays ? '#10b981' : 'var(--text-muted)',
+                                                        fontSize: '0.82rem' }}>
+                                                        {row.calculatedDays !== null && row.calculatedDays !== undefined
+                                                            ? row.calculatedDays
+                                                            : <span style={{ opacity: 0.4 }}>—</span>}
                                                     </td>
                                                     <td>
                                                         <span style={{ color: !row.desde ? 'var(--danger)' : undefined }}>
@@ -1954,19 +2057,25 @@ const VacacionesPage = () => {
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
                                                             gap: '0.3rem',
-                                                            background: row.status === 'valid' ? 'rgba(16, 185, 129, 0.15)' : 
-                                                                        row.status === 'error_dates' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                                            color: row.status === 'valid' ? '#34d399' : 
-                                                                   row.status === 'error_dates' ? '#fbbf24' : '#f87171'
+                                                            background:
+                                                                row.status === 'valid' ? 'rgba(16, 185, 129, 0.15)' :
+                                                                row.status === 'warning_days' ? 'rgba(245, 158, 11, 0.18)' :
+                                                                row.status === 'error_dates' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                                            color:
+                                                                row.status === 'valid' ? '#34d399' :
+                                                                row.status === 'warning_days' ? '#f59e0b' :
+                                                                row.status === 'error_dates' ? '#fbbf24' : '#f87171'
                                                         }}>
                                                             {row.status === 'valid' && <CheckCircle2 size={12} />}
+                                                            {row.status === 'warning_days' && <AlertTriangle size={12} />}
                                                             {row.status === 'error_dates' && <AlertTriangle size={12} />}
                                                             {row.status === 'error_user' && <AlertCircle size={12} />}
-                                                            {row.statusText}
+                                                            {row.status === 'warning_days' ? 'Revisar días' : row.statusText}
                                                         </span>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>

@@ -1096,7 +1096,9 @@ const VacacionesPage = () => {
         return valStr;
     };
 
-    // Helper: calculates the number of working days (Mon-Fri, excluding festivos and bridges) in a date range
+    // Helper: calculates the number of working days (Mon-Fri, excluding festivos).
+    // NOTE: Bridge days (puentes) are already stored in the DB as festivos, so no
+    // additional bridge-detection logic is needed here.
     const calcWorkingDays = (desde, hasta, employee) => {
         if (!desde || !hasta) return null;
         const start = new Date(`${desde}T00:00:00`);
@@ -1112,20 +1114,9 @@ const VacacionesPage = () => {
         while (cur <= end) {
             const dow = cur.getDay();
             const iso = cur.toISOString().split('T')[0];
-            if (dow !== 0 && dow !== 6) {
-                // Not weekend
-                if (!personFestivos.has(iso)) {
-                    // Not festivo — check bridge (puente)
-                    let isBridge = false;
-                    if (dow === 1) { // Monday: bridge if Tuesday is festivo
-                        const tue = new Date(cur); tue.setDate(tue.getDate() + 1);
-                        isBridge = personFestivos.has(tue.toISOString().split('T')[0]);
-                    } else if (dow === 5) { // Friday: bridge if Thursday is festivo
-                        const thu = new Date(cur); thu.setDate(thu.getDate() - 1);
-                        isBridge = personFestivos.has(thu.toISOString().split('T')[0]);
-                    }
-                    if (!isBridge) count++;
-                }
+            // Count day only if Mon–Fri and not a festivo/puente stored in DB
+            if (dow !== 0 && dow !== 6 && !personFestivos.has(iso)) {
+                count++;
             }
             cur.setDate(cur.getDate() + 1);
         }
@@ -1217,6 +1208,9 @@ const VacacionesPage = () => {
                         } else if (!parsedDesde || !parsedHasta) {
                             status = 'error_dates';
                             statusText = 'Fechas inválidas';
+                        } else if (parsedDesde > parsedHasta) {
+                            status = 'error_dates';
+                            statusText = 'Fecha inicio posterior a Fecha fin';
                         } else {
                             // Validate that the declared days match the actual working days in the period
                             calculatedDays = calcWorkingDays(parsedDesde, parsedHasta, matchedEmp);
@@ -1288,6 +1282,9 @@ const VacacionesPage = () => {
                 }
                 if (!row.desde || !row.hasta) {
                     return { ...row, employee: emp, refPer: emp.REF_PER, status: 'error_dates', statusText: 'Fechas inválidas', calculatedDays: null };
+                }
+                if (row.desde > row.hasta) {
+                    return { ...row, employee: emp, refPer: emp.REF_PER, status: 'error_dates', statusText: 'Fecha inicio posterior a Fecha fin', calculatedDays: null };
                 }
                 // Recalculate working days with the new employee (festivos may differ by location)
                 const newCalcDays = calcWorkingDays(row.desde, row.hasta, emp);

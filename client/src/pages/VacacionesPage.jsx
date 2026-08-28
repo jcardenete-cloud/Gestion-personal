@@ -149,18 +149,105 @@ const VacacionesPage = () => {
         return count;
     };
 
-    const handleNewVacationDateChange = (field, val) => {
-        setNewVacationData(prev => {
-            const updated = { ...prev, [field]: val };
-            if (updated.FECHA_DESDE && updated.FECHA_HASTA && updated.REF_PER) {
-                const employee = personalList.find(p => p.REF_PER === parseInt(updated.REF_PER));
-                const days = calcWorkingDays(updated.FECHA_DESDE, updated.FECHA_HASTA, employee);
-                if (days !== null) {
-                    updated.DURACION = String(days);
+    const getNextPartitionNumber = async (refPer, targetYear = null) => {
+        if (!refPer) return '1';
+        try {
+            const res = await api.getVacaciones(refPer);
+            let vacations = res.data || [];
+            if (targetYear) {
+                const yearVacations = vacations.filter(v => v.FECHA_DESDE && String(v.FECHA_DESDE).startsWith(String(targetYear)));
+                if (yearVacations.length > 0) {
+                    vacations = yearVacations;
                 }
             }
-            return updated;
-        });
+            const existingNums = vacations
+                .map(v => parseInt(v.PARTICION_NUM, 10))
+                .filter(n => !isNaN(n) && n > 0);
+
+            if (existingNums.length > 0) {
+                return String(Math.max(...existingNums) + 1);
+            }
+            if (vacations.length > 0) {
+                return String(vacations.length + 1);
+            }
+            return '1';
+        } catch (err) {
+            console.error('Error al comprobar particiones existentes:', err);
+            let vacations = loadedVacaciones.filter(v => String(v.REF_PER) === String(refPer));
+            if (targetYear) {
+                const yearVacations = vacations.filter(v => v.FECHA_DESDE && String(v.FECHA_DESDE).startsWith(String(targetYear)));
+                if (yearVacations.length > 0) vacations = yearVacations;
+            }
+            const existingNums = vacations
+                .map(v => parseInt(v.PARTICION_NUM, 10))
+                .filter(n => !isNaN(n) && n > 0);
+            if (existingNums.length > 0) {
+                return String(Math.max(...existingNums) + 1);
+            }
+            if (vacations.length > 0) {
+                return String(vacations.length + 1);
+            }
+            return '1';
+        }
+    };
+
+    const handleNewVacationEmployeeChange = async (refPer) => {
+        if (!refPer) {
+            setNewVacationData(prev => ({
+                ...prev,
+                REF_PER: '',
+                PARTICION_NUM: '1',
+                DURACION: ''
+            }));
+            return;
+        }
+
+        const employee = personalList.find(p => p.REF_PER === parseInt(refPer));
+        let calculatedDuration = newVacationData.DURACION;
+        if (newVacationData.FECHA_DESDE && newVacationData.FECHA_HASTA) {
+            const days = calcWorkingDays(newVacationData.FECHA_DESDE, newVacationData.FECHA_HASTA, employee);
+            if (days !== null) {
+                calculatedDuration = String(days);
+            }
+        }
+
+        const targetYear = newVacationData.FECHA_DESDE ? newVacationData.FECHA_DESDE.split('-')[0] : null;
+        const nextPart = await getNextPartitionNumber(refPer, targetYear);
+
+        setNewVacationData(prev => ({
+            ...prev,
+            REF_PER: refPer,
+            PARTICION_NUM: nextPart,
+            DURACION: calculatedDuration
+        }));
+    };
+
+    const handleNewVacationDateChange = async (field, val) => {
+        let currentRefPer = newVacationData.REF_PER;
+        let calculatedDuration = newVacationData.DURACION;
+        let newDesde = field === 'FECHA_DESDE' ? val : newVacationData.FECHA_DESDE;
+        let newHasta = field === 'FECHA_HASTA' ? val : newVacationData.FECHA_HASTA;
+
+        if (newDesde && newHasta && currentRefPer) {
+            const employee = personalList.find(p => p.REF_PER === parseInt(currentRefPer));
+            const days = calcWorkingDays(newDesde, newHasta, employee);
+            if (days !== null) {
+                calculatedDuration = String(days);
+            }
+        }
+
+        let nextPart = newVacationData.PARTICION_NUM;
+        if (field === 'FECHA_DESDE' && val && currentRefPer) {
+            const targetYear = val.split('-')[0];
+            nextPart = await getNextPartitionNumber(currentRefPer, targetYear);
+        }
+
+        setNewVacationData(prev => ({
+            ...prev,
+            [field]: val,
+            DURACION: calculatedDuration,
+            PARTICION_NUM: nextPart
+        }));
     };
 
     const handleAddVacation = async (e) => {
@@ -2235,7 +2322,17 @@ const VacacionesPage = () => {
                                     {canManage && (
                                         <button
                                             className="btn btn-primary"
-                                            onClick={() => setIsAddModalOpen(true)}
+                                            onClick={() => {
+                                                setNewVacationData({
+                                                    REF_PER: '',
+                                                    PARTICION_NUM: '1',
+                                                    DURACION: '',
+                                                    FECHA_DESDE: '',
+                                                    FECHA_HASTA: '',
+                                                    ORIGEN_FICHERO: 'Carga manual'
+                                                });
+                                                setIsAddModalOpen(true);
+                                            }}
                                             style={{
                                                 height: '34px',
                                                 display: 'flex',
@@ -3330,7 +3427,7 @@ const VacacionesPage = () => {
                                             <select 
                                                 className="form-control" 
                                                 value={newVacationData.REF_PER} 
-                                                onChange={e => handleNewVacationDateChange('REF_PER', e.target.value)} 
+                                                onChange={e => handleNewVacationEmployeeChange(e.target.value)} 
                                                 required
                                             >
                                                 <option value="">-- Selecciona un empleado --</option>
@@ -3343,20 +3440,19 @@ const VacacionesPage = () => {
                                         </div>
 
                                         <div className="form-group">
-                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Partición</label>
-                                            <select 
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                Partición
+                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>(Automática)</span>
+                                            </label>
+                                            <input 
+                                                type="text" 
                                                 className="form-control" 
-                                                value={newVacationData.PARTICION_NUM} 
-                                                onChange={e => setNewVacationData(prev => ({ ...prev, PARTICION_NUM: e.target.value }))}
-                                                required
-                                            >
-                                                <option value="1">Partición 1</option>
-                                                <option value="2">Partición 2</option>
-                                                <option value="3">Partición 3</option>
-                                                <option value="4">Partición 4</option>
-                                                <option value="5">Partición 5</option>
-                                                <option value="6">Partición 6</option>
-                                            </select>
+                                                value={newVacationData.REF_PER ? `Partición ${newVacationData.PARTICION_NUM || '1'}` : 'Seleccione empleado'} 
+                                                readOnly 
+                                                disabled
+                                                title="El número de partición se calcula automáticamente y no se puede modificar"
+                                                style={{ cursor: 'not-allowed', opacity: 0.85, background: 'rgba(255, 255, 255, 0.05)' }}
+                                            />
                                         </div>
 
                                         <div className="form-group">

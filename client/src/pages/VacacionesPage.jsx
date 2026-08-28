@@ -432,7 +432,7 @@ const VacacionesPage = () => {
 
     const loadFestivosForCalendar = async (year) => {
         try {
-            const res = await api.getFestivos(year, null);
+            const res = await api.getFestivos(null, null);
             const national = new Set();
             const byRef = {};
             (res.data || []).forEach(f => {
@@ -3456,7 +3456,10 @@ const VacacionesPage = () => {
                                         </div>
 
                                         <div className="form-group">
-                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>Días Laborables (Duración)</label>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                Días Laborables (Duración)
+                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>(Calculado automáticamente)</span>
+                                            </label>
                                             <input 
                                                 type="number" 
                                                 className="form-control" 
@@ -3465,6 +3468,7 @@ const VacacionesPage = () => {
                                                 required
                                                 min="0.5"
                                                 step="0.5"
+                                                placeholder="Autocalculado según fechas"
                                             />
                                         </div>
 

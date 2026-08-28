@@ -203,51 +203,67 @@ const VacacionesPage = () => {
         }
 
         const employee = personalList.find(p => p.REF_PER === parseInt(refPer));
-        let calculatedDuration = newVacationData.DURACION;
-        if (newVacationData.FECHA_DESDE && newVacationData.FECHA_HASTA) {
-            const days = calcWorkingDays(newVacationData.FECHA_DESDE, newVacationData.FECHA_HASTA, employee);
-            if (days !== null) {
-                calculatedDuration = String(days);
+        setNewVacationData(prev => {
+            let calculatedDuration = prev.DURACION;
+            if (prev.FECHA_DESDE && prev.FECHA_HASTA) {
+                const days = calcWorkingDays(prev.FECHA_DESDE, prev.FECHA_HASTA, employee);
+                if (days !== null) {
+                    calculatedDuration = String(days);
+                }
             }
+            return {
+                ...prev,
+                REF_PER: refPer,
+                DURACION: calculatedDuration
+            };
+        });
+
+        const targetYear = (newVacationData.FECHA_DESDE && /^\d{4}/.test(newVacationData.FECHA_DESDE))
+            ? newVacationData.FECHA_DESDE.split('-')[0]
+            : null;
+
+        try {
+            const nextPart = await getNextPartitionNumber(refPer, targetYear);
+            setNewVacationData(prev => {
+                if (prev.REF_PER === refPer) {
+                    return { ...prev, PARTICION_NUM: nextPart };
+                }
+                return prev;
+            });
+        } catch (err) {
+            console.error('Error al comprobar particiones:', err);
         }
-
-        const targetYear = newVacationData.FECHA_DESDE ? newVacationData.FECHA_DESDE.split('-')[0] : null;
-        const nextPart = await getNextPartitionNumber(refPer, targetYear);
-
-        setNewVacationData(prev => ({
-            ...prev,
-            REF_PER: refPer,
-            PARTICION_NUM: nextPart,
-            DURACION: calculatedDuration
-        }));
     };
 
-    const handleNewVacationDateChange = async (field, val) => {
-        let currentRefPer = newVacationData.REF_PER;
-        let calculatedDuration = newVacationData.DURACION;
-        let newDesde = field === 'FECHA_DESDE' ? val : newVacationData.FECHA_DESDE;
-        let newHasta = field === 'FECHA_HASTA' ? val : newVacationData.FECHA_HASTA;
-
-        if (newDesde && newHasta && currentRefPer) {
-            const employee = personalList.find(p => p.REF_PER === parseInt(currentRefPer));
-            const days = calcWorkingDays(newDesde, newHasta, employee);
-            if (days !== null) {
-                calculatedDuration = String(days);
+    const handleNewVacationDateChange = (field, val) => {
+        // 1. Update form state & duration synchronously on every keystroke
+        setNewVacationData(prev => {
+            const updated = { ...prev, [field]: val };
+            if (updated.FECHA_DESDE && updated.FECHA_HASTA && updated.REF_PER) {
+                const employee = personalList.find(p => p.REF_PER === parseInt(updated.REF_PER));
+                const days = calcWorkingDays(updated.FECHA_DESDE, updated.FECHA_HASTA, employee);
+                if (days !== null) {
+                    updated.DURACION = String(days);
+                }
             }
-        }
+            return updated;
+        });
 
-        let nextPart = newVacationData.PARTICION_NUM;
-        if (field === 'FECHA_DESDE' && val && currentRefPer) {
+        // 2. Only re-check partition number when a full 4-digit year date is entered
+        if (field === 'FECHA_DESDE' && val && /^\d{4}-\d{2}-\d{2}$/.test(val) && newVacationData.REF_PER) {
             const targetYear = val.split('-')[0];
-            nextPart = await getNextPartitionNumber(currentRefPer, targetYear);
+            const refPer = newVacationData.REF_PER;
+            getNextPartitionNumber(refPer, targetYear).then(nextPart => {
+                setNewVacationData(prev => {
+                    if (prev.REF_PER === refPer) {
+                        return { ...prev, PARTICION_NUM: nextPart };
+                    }
+                    return prev;
+                });
+            }).catch(err => {
+                console.error('Error al recalcular partición por año:', err);
+            });
         }
-
-        setNewVacationData(prev => ({
-            ...prev,
-            [field]: val,
-            DURACION: calculatedDuration,
-            PARTICION_NUM: nextPart
-        }));
     };
 
     const handleAddVacation = async (e) => {

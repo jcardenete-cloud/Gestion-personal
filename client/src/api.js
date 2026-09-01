@@ -178,6 +178,7 @@ const getAssignments = async (codigopr) => {
         APELLIDO1: person.APELLIDO1,
         APELLIDO2: person.APELLIDO2,
         PERFIL: person.PERFIL,
+        ACTIVO: person.ACTIVO,
       };
     }
     return a;

@@ -71,9 +71,9 @@ const AssignmentsPage = () => {
     const sortedAssignments = React.useMemo(() => {
         let sortableItems = [...assignments];
 
-        // Filter by BAJA if showOnlyActive is true
+        // Filter by ACTIVO if showOnlyActive is true
         if (showOnlyActive) {
-            sortableItems = sortableItems.filter(a => !a.BAJA);
+            sortableItems = sortableItems.filter(a => a.ACTIVO === 'S');
         }
 
         if (sortConfig.key !== null) {
@@ -363,9 +363,9 @@ const AssignmentsPage = () => {
                                         </td>
                                     </tr>
                                 ))}
-                                {assignments.length === 0 && (
+                                {sortedAssignments.length === 0 && (
                                     <tr>
-                                        <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay personal asignado</td>
+                                        <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay personal asignado</td>
                                     </tr>
                                 )}
                             </tbody>

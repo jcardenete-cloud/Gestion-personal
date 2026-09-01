@@ -139,8 +139,18 @@ const getPersonal = () => selectAll('LISTA_PERSONAL');
 
 const createPersonal = (data) => insertRows('LISTA_PERSONAL', data);
 
-const updatePersonal = (data) =>
-  updateRow('LISTA_PERSONAL', data, { REF_PER: data.REF_PER });
+const updatePersonal = async (data) => {
+  const res = await updateRow('LISTA_PERSONAL', data, { REF_PER: data.REF_PER });
+
+  const isInactive = String(data.ACTIVO || '').toUpperCase() === 'N';
+  const bajaDate = typeof data.BAJA === 'string' ? data.BAJA.split('T')[0] : data.BAJA;
+
+  if (isInactive && bajaDate) {
+    await updateRow('PERSONAL_PROYECTOS', { BAJA: bajaDate }, { REF_PER: data.REF_PER });
+  }
+
+  return res;
+};
 
 const deletePersonal = (id) =>
   deleteRow('LISTA_PERSONAL', { REF_PER: id });

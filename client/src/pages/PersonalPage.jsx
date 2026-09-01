@@ -18,13 +18,14 @@ const PersonalPage = () => {
     };
     const [formData, setFormData] = useState(initialFormState);
     const [filterActive, setFilterActive] = useState('S');
+    const [filterResp, setFilterResp] = useState('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [locations, setLocations] = useState([]);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(15);
-    const [visibleColumns, setVisibleColumns] = useState(['REF_PER', 'IDEMPLEADO', 'NOMBRE', 'APELLIDOS', 'PERFIL', 'ACTIVO', 'NIF']);
+    const [visibleColumns, setVisibleColumns] = useState(['REF_PER', 'IDEMPLEADO', 'NOMBRE', 'APELLIDOS', 'PERFIL', 'ACTIVO', 'RESP', 'NIF']);
     const [allColumns] = useState([
         { id: 'REF_PER', label: 'Ref', key: 'REF_PER' },
         { id: 'N_FICHA', label: 'Ficha', key: 'N_FICHA' },
@@ -33,6 +34,7 @@ const PersonalPage = () => {
         { id: 'APELLIDOS', label: 'Apellidos', key: 'APELLIDOS' },
         { id: 'PERFIL', label: 'Perfil', key: 'PERFIL' },
         { id: 'ACTIVO', label: 'Activo', key: 'ACTIVO' },
+        { id: 'RESP', label: 'Resp', key: 'RESP' },
         { id: 'USUARIO', label: 'Usuario', key: 'USUARIO' },
         { id: 'NIF', label: 'NIF', key: 'NIF' },
         { id: 'TELEFONO_1', label: 'Tel 1', key: 'TELEFONO_1' },
@@ -68,6 +70,10 @@ const PersonalPage = () => {
         let matchesFilter = true;
         if (filterActive !== 'ALL') {
             matchesFilter = item.ACTIVO === filterActive;
+        }
+
+        if (filterResp !== 'ALL') {
+            matchesFilter = matchesFilter && item.RESP === filterResp;
         }
 
         if (!matchesFilter) return false;
@@ -133,7 +139,7 @@ const PersonalPage = () => {
     // Reset to first page when filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterActive]);
+    }, [filterActive, filterResp]);
 
     // Pagination logic
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -240,6 +246,33 @@ const PersonalPage = () => {
                     </div>
                 </div>
 
+                <div className="glass-card" style={{ flex: 1, padding: '1rem' }}>
+                    <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Filtrar Responsable:</p>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                            onClick={() => { setFilterResp('S'); setCurrentPage(1); }}
+                            className={`btn ${filterResp === 'S' ? 'btn-primary' : ''}`}
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', flex: 1, background: filterResp === 'S' ? '' : 'rgba(255,255,255,0.05)', color: filterResp === 'S' ? '' : 'var(--text-muted)', border: '1px solid var(--border-card)' }}
+                        >
+                            Sí
+                        </button>
+                        <button
+                            onClick={() => { setFilterResp('N'); setCurrentPage(1); }}
+                            className={`btn ${filterResp === 'N' ? 'btn-primary' : ''}`}
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', flex: 1, background: filterResp === 'N' ? '' : 'rgba(255,255,255,0.05)', color: filterResp === 'N' ? '' : 'var(--text-muted)', border: '1px solid var(--border-card)' }}
+                        >
+                            No
+                        </button>
+                        <button
+                            onClick={() => { setFilterResp('ALL'); setCurrentPage(1); }}
+                            className={`btn ${filterResp === 'ALL' ? 'btn-primary' : ''}`}
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', flex: 1, background: filterResp === 'ALL' ? '' : 'rgba(255,255,255,0.05)', color: filterResp === 'ALL' ? '' : 'var(--text-muted)', border: '1px solid var(--border-card)' }}
+                        >
+                            Todos
+                        </button>
+                    </div>
+                </div>
+
                 <div className="glass-card" style={{ flex: 2, padding: '1rem' }}>
                     <p style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Columnas Dinámicas:</p>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -297,6 +330,7 @@ const PersonalPage = () => {
                                 {visibleColumns.includes('APELLIDOS') && <td>{item.APELLIDO1} {item.APELLIDO2}</td>}
                                 {visibleColumns.includes('PERFIL') && <td>{item.PERFIL}</td>}
                                 {visibleColumns.includes('ACTIVO') && <td>{item.ACTIVO === 'S' ? '✅' : '❌'}</td>}
+                                {visibleColumns.includes('RESP') && <td>{item.RESP === 'S' ? '✅' : '❌'}</td>}
                                 {visibleColumns.includes('USUARIO') && <td>{item.USUARIO}</td>}
                                 {visibleColumns.includes('NIF') && <td>{item.NIF}</td>}
                                 {visibleColumns.includes('TELEFONO_1') && <td>{item.TELEFONO_1}</td>}

@@ -54,7 +54,7 @@ const applyFilters = (builder, filters) => {
  * SELECT genérico con filtros opcionales y normalización de claves a MAYÚSCULAS.
  */
 const selectAll = async (tableName, filters = null, order = null) => {
-  let builder = table(tableName).select('*');
+  let builder = table(tableName).select('*').limit(50000);
   builder = applyFilters(builder, filters);
   if (order) builder = builder.order(order.toLowerCase());
   const { data, error } = await builder;
@@ -169,8 +169,16 @@ const bulkUpdatePersonalLocation = async (ref_pers, new_location) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const getAssignments = async (codigopr) => {
-  let builder = table('PERSONAL_PROYECTOS').select('*');
-  if (codigopr) builder = builder.eq('codigopr', codigopr);
+  let builder = table('PERSONAL_PROYECTOS').select('*').limit(50000);
+  if (codigopr) {
+    if (Array.isArray(codigopr)) {
+      if (codigopr.length > 0) {
+        builder = builder.in('codigopr', codigopr);
+      }
+    } else {
+      builder = builder.eq('codigopr', codigopr);
+    }
+  }
   const { data: assignments, error } = await builder;
   throwIfError({ error });
 
@@ -226,7 +234,7 @@ const deleteUbicacion = (id) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 const getVacaciones = async (ref_per, year, origen_fichero, codigopr) => {
-  const { data: vacations, error } = await table('VACACIONES').select('*');
+  const { data: vacations, error } = await table('VACACIONES').select('*').limit(50000);
   throwIfError({ error });
 
   let rows = normalizeKeys(vacations || []);

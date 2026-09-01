@@ -80,7 +80,7 @@ const PersonalAssignmentsSummaryPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEncargos, setSelectedEncargos] = useState([]);
     const [encargoSearchFilter, setEncargoSearchFilter] = useState('');
-    const [personalStatusFilter, setPersonalStatusFilter] = useState('active'); // 'active', 'inactive', 'all'
+    const [personalStatusFilter, setPersonalStatusFilter] = useState('all'); // 'active', 'inactive', 'all'
     const [onlyActiveAssignments, setOnlyActiveAssignments] = useState(false);
     const [isEncargoDropdownOpen, setIsEncargoDropdownOpen] = useState(false);
     const [isColumnSelectorOpen, setIsColumnSelectorOpen] = useState(false);
@@ -108,19 +108,16 @@ const PersonalAssignmentsSummaryPage = () => {
         };
     }, []);
 
-    // Fetch all initial data
+    // Fetch base metadata: personal, encargos, ubicaciones
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchBaseData = async () => {
             try {
-                setLoading(true);
-                const [asgnRes, persRes, encRes, ubiRes] = await Promise.all([
-                    api.getAssignments(),
+                const [persRes, encRes, ubiRes] = await Promise.all([
                     api.getPersonal(),
                     api.getEncargos(),
                     api.getUbicacion().catch(() => ({ data: [] }))
                 ]);
 
-                setAssignments(asgnRes.data || []);
                 setPersonalList(persRes.data || []);
                 
                 // Sort encargos by CODIGOPR
@@ -130,20 +127,37 @@ const PersonalAssignmentsSummaryPage = () => {
                 setEncargosList(sortedEnc);
                 setUbicacionesList(ubiRes.data || []);
             } catch (err) {
-                console.error("Error al cargar datos del resumen:", err);
+                console.error("Error al cargar datos base del resumen:", err);
+            }
+        };
+
+        fetchBaseData();
+    }, []);
+
+    // Fetch assignments from Supabase dynamically whenever selectedEncargos change
+    useEffect(() => {
+        const fetchAssignments = async () => {
+            try {
+                setLoading(true);
+                const asgnRes = await api.getAssignments(selectedEncargos.length > 0 ? selectedEncargos : null);
+                setAssignments(asgnRes.data || []);
+            } catch (err) {
+                console.error("Error al cargar asignaciones:", err);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchData();
-    }, []);
+        fetchAssignments();
+    }, [selectedEncargos]);
 
     // Build map lookups
     const personalMap = useMemo(() => {
         const map = {};
         personalList.forEach(p => {
-            map[String(p.REF_PER)] = p;
+            if (p.REF_PER !== null && p.REF_PER !== undefined) {
+                map[String(p.REF_PER).trim()] = p;
+            }
         });
         return map;
     }, [personalList]);
@@ -151,7 +165,9 @@ const PersonalAssignmentsSummaryPage = () => {
     const encargosMap = useMemo(() => {
         const map = {};
         encargosList.forEach(e => {
-            map[String(e.CODIGOPR)] = e;
+            if (e.CODIGOPR !== null && e.CODIGOPR !== undefined) {
+                map[String(e.CODIGOPR).trim().toUpperCase()] = e;
+            }
         });
         return map;
     }, [encargosList]);
@@ -159,7 +175,9 @@ const PersonalAssignmentsSummaryPage = () => {
     const ubicacionesMap = useMemo(() => {
         const map = {};
         ubicacionesList.forEach(u => {
-            map[String(u.REF_UBI)] = u.A_LUGAR;
+            if (u.REF_UBI !== null && u.REF_UBI !== undefined) {
+                map[String(u.REF_UBI).trim()] = u.A_LUGAR;
+            }
         });
         return map;
     }, [ubicacionesList]);
@@ -167,14 +185,16 @@ const PersonalAssignmentsSummaryPage = () => {
     // Combine all assignments into detailed flat objects
     const combinedData = useMemo(() => {
         return assignments.map(a => {
-            const p = personalMap[String(a.REF_PER)] || {};
-            const e = encargosMap[String(a.CODIGOPR)] || {};
+            const encCodeStr = a.CODIGOPR !== null && a.CODIGOPR !== undefined ? String(a.CODIGOPR).trim() : '';
+            const refPerStr = a.REF_PER !== null && a.REF_PER !== undefined ? String(a.REF_PER).trim() : '';
+            const p = personalMap[refPerStr] || {};
+            const e = encargosMap[encCodeStr.toUpperCase()] || {};
 
             const nombreCompleto = `${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''} ${p.NOMBRE || ''}`.trim() || 
                                    `${a.APELLIDO1 || ''} ${a.APELLIDO2 || ''} ${a.NOMBRE || ''}`.trim() || 'Desconocido';
 
             return {
-                id: `${a.REF_PER}-${a.CODIGOPR}`,
+                id: `${refPerStr}-${encCodeStr}`,
                 // Personal fields
                 REF_PER: a.REF_PER,
                 NOMBRE_COMPLETO: nombreCompleto,
@@ -185,14 +205,14 @@ const PersonalAssignmentsSummaryPage = () => {
                 ACTIVO: p.ACTIVO || a.ACTIVO || 'N',
                 NIF: p.NIF || '',
                 USUARIO: p.USUARIO || '',
-                UBICACION: ubicacionesMap[String(p.REF_UBI)] || p.REF_UBI || '',
+                UBICACION: ubicacionesMap[String(p.REF_UBI || '').trim()] || p.REF_UBI || '',
                 TELEFONO_1: p.TELEFONO_1 || '',
                 INCORPORACION: p.INCORPORACION || null,
                 BAJA_PERSONAL: p.BAJA || null,
                 SITUACION: p.SITUACION || '',
 
                 // Encargo fields
-                CODIGOPR: a.CODIGOPR || '',
+                CODIGOPR: encCodeStr,
                 NOMBRE_ENCARGO: e.NOMBRE || 'Desconocido',
                 CLIENTE: e.CLIENTE || '',
                 AREA: e.AREA || '',
@@ -214,15 +234,21 @@ const PersonalAssignmentsSummaryPage = () => {
 
     // Filter data
     const filteredData = useMemo(() => {
+        const selSet = new Set(selectedEncargos.map(code => String(code).trim().toUpperCase()));
+
         return combinedData.filter(item => {
             // 1. Multi-encargo filter
-            if (selectedEncargos.length > 0 && !selectedEncargos.includes(item.CODIGOPR)) {
-                return false;
+            if (selSet.size > 0) {
+                const itemCode = String(item.CODIGOPR || '').trim().toUpperCase();
+                if (!selSet.has(itemCode)) {
+                    return false;
+                }
             }
 
             // 2. Personal status filter
-            if (personalStatusFilter === 'active' && item.ACTIVO !== 'S') return false;
-            if (personalStatusFilter === 'inactive' && item.ACTIVO === 'S') return false;
+            const isPersonActive = String(item.ACTIVO || '').trim().toUpperCase() === 'S';
+            if (personalStatusFilter === 'active' && !isPersonActive) return false;
+            if (personalStatusFilter === 'inactive' && isPersonActive) return false;
 
             // 3. Only active assignments filter
             if (onlyActiveAssignments && item.BAJA_ASIGNACION) {
@@ -327,16 +353,17 @@ const PersonalAssignmentsSummaryPage = () => {
 
     // Encargo multi-select handlers
     const toggleEncargoSelection = (codigopr) => {
+        const strCode = String(codigopr).trim();
         setSelectedEncargos(prev => 
-            prev.includes(codigopr) 
-                ? prev.filter(c => c !== codigopr) 
-                : [...prev, codigopr]
+            prev.includes(strCode) 
+                ? prev.filter(c => c !== strCode) 
+                : [...prev, strCode]
         );
         setCurrentPage(1);
     };
 
     const selectAllEncargos = () => {
-        setSelectedEncargos(encargosList.map(e => e.CODIGOPR));
+        setSelectedEncargos(encargosList.map(e => String(e.CODIGOPR).trim()));
         setCurrentPage(1);
     };
 
@@ -349,8 +376,8 @@ const PersonalAssignmentsSummaryPage = () => {
         if (!encargoSearchFilter) return encargosList;
         const s = normalizeString(encargoSearchFilter);
         return encargosList.filter(e => 
-            normalizeString(e.CODIGOPR).includes(s) || 
-            normalizeString(e.NOMBRE).includes(s)
+            normalizeString(String(e.CODIGOPR || '')).includes(s) || 
+            normalizeString(String(e.NOMBRE || '')).includes(s)
         );
     }, [encargosList, encargoSearchFilter]);
 
@@ -919,11 +946,12 @@ const PersonalAssignmentsSummaryPage = () => {
 
                                 <div style={{ overflowY: 'auto', maxHeight: '200px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                     {filteredEncargosOptions.map(e => {
-                                        const isSelected = selectedEncargos.includes(e.CODIGOPR);
+                                        const strCode = String(e.CODIGOPR).trim();
+                                        const isSelected = selectedEncargos.includes(strCode);
                                         return (
                                             <div
-                                                key={e.CODIGOPR}
-                                                onClick={() => toggleEncargoSelection(e.CODIGOPR)}
+                                                key={strCode}
+                                                onClick={() => toggleEncargoSelection(strCode)}
                                                 style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
@@ -938,7 +966,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                             >
                                                 {isSelected ? <CheckSquare size={16} color="var(--primary)" /> : <Square size={16} style={{ opacity: 0.4 }} />}
                                                 <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: isSelected ? 'var(--primary)' : 'var(--text-main)' }}>
-                                                    {e.CODIGOPR}
+                                                    {strCode}
                                                 </span>
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {e.NOMBRE}
@@ -1005,7 +1033,7 @@ const PersonalAssignmentsSummaryPage = () => {
                         Encargos filtrados:
                     </span>
                     {selectedEncargos.map(code => {
-                        const enc = encargosMap[code];
+                        const enc = encargosMap[code.toUpperCase()];
                         return (
                             <span
                                 key={code}

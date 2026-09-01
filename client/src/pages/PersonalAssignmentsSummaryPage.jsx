@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ChevronLeft, 
@@ -92,6 +92,21 @@ const PersonalAssignmentsSummaryPage = () => {
     const [sortConfig, setSortConfig] = useState({ key: 'NOMBRE_COMPLETO', direction: 'asc' });
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
+
+    // Click outside ref for Encargo Dropdown
+    const encargoDropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (encargoDropdownRef.current && !encargoDropdownRef.current.contains(event.target)) {
+                setIsEncargoDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     // Fetch all initial data
     useEffect(() => {
@@ -535,7 +550,8 @@ const PersonalAssignmentsSummaryPage = () => {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.5rem',
-                            background: isColumnSelectorOpen ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
+                            background: isColumnSelectorOpen ? 'var(--primary)' : 'var(--bg-card)',
+                            color: isColumnSelectorOpen ? '#ffffff' : 'var(--text-main)',
                             border: '1px solid var(--border-card)'
                         }}
                     >
@@ -558,7 +574,7 @@ const PersonalAssignmentsSummaryPage = () => {
             {/* Metrics Ribbon */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div className="glass-card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', background: 'rgba(99, 102, 241, 0.15)', borderRadius: '10px', color: '#818cf8' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(119, 25, 170, 0.1)', borderRadius: '10px', color: 'var(--primary)' }}>
                         <Layers size={22} />
                     </div>
                     <div>
@@ -568,7 +584,7 @@ const PersonalAssignmentsSummaryPage = () => {
                 </div>
 
                 <div className="glass-card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '10px', color: '#4ade80' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '10px', color: '#16a34a' }}>
                         <Users size={22} />
                     </div>
                     <div>
@@ -578,7 +594,7 @@ const PersonalAssignmentsSummaryPage = () => {
                 </div>
 
                 <div className="glass-card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '10px', color: '#facc15' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '10px', color: '#d97706' }}>
                         <Briefcase size={22} />
                     </div>
                     <div>
@@ -590,7 +606,7 @@ const PersonalAssignmentsSummaryPage = () => {
                 </div>
 
                 <div className="glass-card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', background: 'rgba(168, 85, 247, 0.15)', borderRadius: '10px', color: '#c084fc' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(168, 85, 247, 0.15)', borderRadius: '10px', color: '#9333ea' }}>
                         <Filter size={22} />
                     </div>
                     <div>
@@ -610,7 +626,7 @@ const PersonalAssignmentsSummaryPage = () => {
                         transition={{ duration: 0.3 }}
                         style={{ overflow: 'hidden', marginBottom: '1.5rem' }}
                     >
-                        <div className="glass-card" style={{ padding: '1.25rem', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                        <div className="glass-card" style={{ padding: '1.25rem', border: '1px solid var(--primary)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <SlidersHorizontal size={18} color="var(--primary)" />
@@ -623,28 +639,28 @@ const PersonalAssignmentsSummaryPage = () => {
                                     <button
                                         onClick={selectAllColumns}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'rgba(255,255,255,0.05)' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'var(--input-bg)', border: '1px solid var(--border-card)', color: 'var(--text-main)' }}
                                     >
                                         Marcar Todos
                                     </button>
                                     <button
                                         onClick={deselectAllColumns}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'rgba(255,255,255,0.05)' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'var(--input-bg)', border: '1px solid var(--border-card)', color: 'var(--text-main)' }}
                                     >
                                         Mínimo
                                     </button>
                                     <button
                                         onClick={resetDefaultColumns}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', background: 'var(--input-bg)', border: '1px solid var(--border-card)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                                     >
                                         <RotateCcw size={12} /> Por Defecto
                                     </button>
                                     <button
                                         onClick={() => setIsColumnSelectorOpen(false)}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626' }}
                                     >
                                         <X size={14} />
                                     </button>
@@ -653,8 +669,8 @@ const PersonalAssignmentsSummaryPage = () => {
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                                 {/* Group 1: Encargo */}
-                                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#818cf8', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.4)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-card)' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <Briefcase size={14} /> Campos del Encargo
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -669,7 +685,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                                         padding: '0.3rem 0.6rem',
                                                         borderRadius: '6px',
                                                         border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border-card)',
-                                                        background: isChecked ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
+                                                        background: isChecked ? 'var(--primary)' : 'var(--input-bg)',
                                                         color: isChecked ? '#ffffff' : 'var(--text-muted)',
                                                         cursor: 'pointer',
                                                         display: 'flex',
@@ -686,8 +702,8 @@ const PersonalAssignmentsSummaryPage = () => {
                                 </div>
 
                                 {/* Group 2: Asignación */}
-                                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#c084fc', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.4)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-card)' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#7c3aed', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <Layers size={14} /> Campos de la Asignación
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -702,7 +718,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                                         padding: '0.3rem 0.6rem',
                                                         borderRadius: '6px',
                                                         border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border-card)',
-                                                        background: isChecked ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
+                                                        background: isChecked ? 'var(--primary)' : 'var(--input-bg)',
                                                         color: isChecked ? '#ffffff' : 'var(--text-muted)',
                                                         cursor: 'pointer',
                                                         display: 'flex',
@@ -719,8 +735,8 @@ const PersonalAssignmentsSummaryPage = () => {
                                 </div>
 
                                 {/* Group 3: Personal */}
-                                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4ade80', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.4)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-card)' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#16a34a', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <Users size={14} /> Campos del Personal
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -735,7 +751,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                                         padding: '0.3rem 0.6rem',
                                                         borderRadius: '6px',
                                                         border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border-card)',
-                                                        background: isChecked ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
+                                                        background: isChecked ? 'var(--primary)' : 'var(--input-bg)',
                                                         color: isChecked ? '#ffffff' : 'var(--text-muted)',
                                                         cursor: 'pointer',
                                                         display: 'flex',
@@ -757,7 +773,7 @@ const PersonalAssignmentsSummaryPage = () => {
             </AnimatePresence>
 
             {/* Filter Bar: Multi-Encargo & Status Filters & Search */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem', position: 'relative', zIndex: isEncargoDropdownOpen ? 999 : 10 }}>
                 {/* 1. Global Search */}
                 <div className="glass-card" style={{ padding: '0.8rem 1rem' }}>
                     <p style={{ fontSize: '0.8rem', marginBottom: '0.4rem', color: 'var(--text-muted)' }}>Búsqueda General:</p>
@@ -767,7 +783,7 @@ const PersonalAssignmentsSummaryPage = () => {
                             type="text"
                             placeholder="Buscar por nombre, encargo, perfil, cliente..."
                             className="form-control"
-                            style={{ paddingLeft: '2.4rem', height: '40px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-card)' }}
+                            style={{ paddingLeft: '2.4rem', height: '40px', fontSize: '0.85rem' }}
                             value={searchTerm}
                             onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                         />
@@ -783,7 +799,11 @@ const PersonalAssignmentsSummaryPage = () => {
                 </div>
 
                 {/* 2. Multi-Encargo Selector Filter */}
-                <div className="glass-card" style={{ padding: '0.8rem 1rem', position: 'relative' }}>
+                <div 
+                    ref={encargoDropdownRef}
+                    className="glass-card" 
+                    style={{ padding: '0.8rem 1rem', position: 'relative', zIndex: isEncargoDropdownOpen ? 1000 : 2 }}
+                >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                         <p style={{ fontSize: '0.8rem', margin: 0, color: 'var(--text-muted)' }}>
                             Filtro Encargos ({selectedEncargos.length === 0 ? 'Todos' : `${selectedEncargos.length} selec.`}):
@@ -791,7 +811,7 @@ const PersonalAssignmentsSummaryPage = () => {
                         {selectedEncargos.length > 0 && (
                             <button 
                                 onClick={clearEncargosSelection}
-                                style={{ fontSize: '0.75rem', background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer' }}
+                                style={{ fontSize: '0.75rem', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold' }}
                             >
                                 Limpiar
                             </button>
@@ -809,8 +829,9 @@ const PersonalAssignmentsSummaryPage = () => {
                             alignItems: 'center',
                             fontSize: '0.85rem',
                             cursor: 'pointer',
-                            background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid var(--border-card)'
+                            background: 'var(--input-bg)',
+                            color: 'var(--text-main)',
+                            border: isEncargoDropdownOpen ? '1px solid var(--primary)' : '1px solid var(--border-card)'
                         }}
                     >
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -818,7 +839,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                 ? '✨ Todos los encargos (sin filtrar)' 
                                 : `${selectedEncargos.length} encargo(s) seleccionado(s)`}
                         </span>
-                        <Filter size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
+                        <Filter size={14} style={{ opacity: 0.6, flexShrink: 0, color: 'var(--primary)' }} />
                     </button>
 
                     {/* Encargos Dropdown Popup */}
@@ -828,20 +849,21 @@ const PersonalAssignmentsSummaryPage = () => {
                                 initial={{ opacity: 0, y: 5 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 5 }}
+                                transition={{ duration: 0.15 }}
                                 style={{
                                     position: 'absolute',
-                                    top: '100%',
+                                    top: 'calc(100% + 6px)',
                                     left: 0,
                                     right: 0,
-                                    zIndex: 100,
-                                    marginTop: '6px',
-                                    background: 'rgba(15, 23, 42, 0.98)',
-                                    borderRadius: '10px',
-                                    padding: '0.8rem',
-                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+                                    zIndex: 1001,
+                                    background: 'var(--glass2-bg, #ffffff)',
+                                    color: 'var(--text-main, #323130)',
+                                    borderRadius: '12px',
+                                    padding: '0.9rem',
+                                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1)',
                                     border: '1px solid var(--border-card)',
-                                    backdropFilter: 'blur(12px)',
-                                    maxHeight: '340px',
+                                    backdropFilter: 'blur(16px)',
+                                    maxHeight: '350px',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     gap: '0.6rem'
@@ -855,44 +877,47 @@ const PersonalAssignmentsSummaryPage = () => {
                                             placeholder="Buscar encargo..."
                                             value={encargoSearchFilter}
                                             onChange={(e) => setEncargoSearchFilter(e.target.value)}
+                                            className="form-control"
                                             style={{
                                                 width: '100%',
-                                                padding: '0.3rem 0.5rem 0.3rem 1.8rem',
+                                                paddingLeft: '1.9rem',
+                                                paddingRight: '0.5rem',
+                                                height: '32px',
                                                 fontSize: '0.8rem',
                                                 borderRadius: '6px',
-                                                background: 'rgba(255,255,260,0.06)',
-                                                border: '1px solid var(--border-card)',
-                                                color: '#fff'
+                                                background: 'var(--input-bg)',
+                                                color: 'var(--text-main)',
+                                                border: '1px solid var(--border-card)'
                                             }}
                                         />
                                     </div>
                                     <button
                                         onClick={() => setIsEncargoDropdownOpen(false)}
                                         className="btn"
-                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626' }}
                                     >
                                         <X size={14} />
                                     </button>
                                 </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border-card)' }}>
                                     <button
                                         onClick={selectAllEncargos}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', flex: 1, background: 'rgba(255,255,255,0.05)' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', flex: 1, background: 'var(--input-bg)', color: 'var(--text-main)', border: '1px solid var(--border-card)' }}
                                     >
                                         Seleccionar Todos
                                     </button>
                                     <button
                                         onClick={clearEncargosSelection}
                                         className="btn"
-                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', flex: 1, background: 'rgba(255,255,255,0.05)' }}
+                                        style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', flex: 1, background: 'var(--input-bg)', color: 'var(--text-main)', border: '1px solid var(--border-card)' }}
                                     >
                                         Deseleccionar
                                     </button>
                                 </div>
 
-                                <div style={{ overflowY: 'auto', maxHeight: '200px', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                <div style={{ overflowY: 'auto', maxHeight: '200px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                     {filteredEncargosOptions.map(e => {
                                         const isSelected = selectedEncargos.includes(e.CODIGOPR);
                                         return (
@@ -903,15 +928,16 @@ const PersonalAssignmentsSummaryPage = () => {
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: '0.6rem',
-                                                    padding: '0.35rem 0.5rem',
+                                                    padding: '0.4rem 0.6rem',
                                                     borderRadius: '6px',
                                                     cursor: 'pointer',
-                                                    background: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                                                    border: isSelected ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent'
+                                                    background: isSelected ? 'rgba(119, 25, 170, 0.08)' : 'transparent',
+                                                    border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
+                                                    transition: 'background 0.15s ease'
                                                 }}
                                             >
-                                                {isSelected ? <CheckSquare size={16} color="#818cf8" /> : <Square size={16} style={{ opacity: 0.4 }} />}
-                                                <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: isSelected ? '#818cf8' : 'inherit' }}>
+                                                {isSelected ? <CheckSquare size={16} color="var(--primary)" /> : <Square size={16} style={{ opacity: 0.4 }} />}
+                                                <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: isSelected ? 'var(--primary)' : 'var(--text-main)' }}>
                                                     {e.CODIGOPR}
                                                 </span>
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -935,25 +961,25 @@ const PersonalAssignmentsSummaryPage = () => {
                 <div className="glass-card" style={{ padding: '0.8rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <p style={{ fontSize: '0.8rem', marginBottom: '0.4rem', color: 'var(--text-muted)' }}>Estado del Personal & Asignación:</p>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border-card)' }}>
+                        <div style={{ display: 'flex', flex: 1, background: 'var(--input-bg)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border-card)' }}>
                             <button
                                 onClick={() => { setPersonalStatusFilter('active'); setCurrentPage(1); }}
                                 className={`btn ${personalStatusFilter === 'active' ? 'btn-primary' : ''}`}
-                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'active' ? '' : 'transparent', color: personalStatusFilter === 'active' ? '' : 'var(--text-muted)' }}
+                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'active' ? '' : 'transparent', color: personalStatusFilter === 'active' ? '#fff' : 'var(--text-muted)' }}
                             >
                                 Activos
                             </button>
                             <button
                                 onClick={() => { setPersonalStatusFilter('inactive'); setCurrentPage(1); }}
                                 className={`btn ${personalStatusFilter === 'inactive' ? 'btn-primary' : ''}`}
-                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'inactive' ? '' : 'transparent', color: personalStatusFilter === 'inactive' ? '' : 'var(--text-muted)' }}
+                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'inactive' ? '' : 'transparent', color: personalStatusFilter === 'inactive' ? '#fff' : 'var(--text-muted)' }}
                             >
                                 Inactivos
                             </button>
                             <button
                                 onClick={() => { setPersonalStatusFilter('all'); setCurrentPage(1); }}
                                 className={`btn ${personalStatusFilter === 'all' ? 'btn-primary' : ''}`}
-                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'all' ? '' : 'transparent', color: personalStatusFilter === 'all' ? '' : 'var(--text-muted)' }}
+                                style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: personalStatusFilter === 'all' ? '' : 'transparent', color: personalStatusFilter === 'all' ? '#fff' : 'var(--text-muted)' }}
                             >
                                 Todos
                             </button>
@@ -985,20 +1011,20 @@ const PersonalAssignmentsSummaryPage = () => {
                                 key={code}
                                 style={{
                                     fontSize: '0.75rem',
-                                    background: 'rgba(99, 102, 241, 0.15)',
-                                    color: '#818cf8',
+                                    background: 'rgba(119, 25, 170, 0.08)',
+                                    color: 'var(--primary)',
                                     padding: '3px 8px',
                                     borderRadius: '12px',
-                                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                                    border: '1px solid rgba(119, 25, 170, 0.25)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '0.4rem'
                                 }}
                             >
-                                <strong>{code}</strong> {enc?.NOMBRE ? `(${enc.NOMBRE.slice(0, 20)}...)` : ''}
+                                <strong>{code}</strong> {enc?.NOMBRE ? `(${enc.NOMBRE.slice(0, 22)}...)` : ''}
                                 <button
                                     onClick={() => toggleEncargoSelection(code)}
-                                    style={{ background: 'transparent', border: 'none', color: '#818cf8', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
                                 >
                                     <X size={12} />
                                 </button>
@@ -1009,7 +1035,7 @@ const PersonalAssignmentsSummaryPage = () => {
             )}
 
             {/* Main Table Card */}
-            <div className="glass-card">
+            <div className="glass-card" style={{ position: 'relative', zIndex: 1 }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                         <div style={{ marginBottom: '0.5rem' }}>Cargando asignaciones y personal...</div>
@@ -1089,7 +1115,7 @@ const PersonalAssignmentsSummaryPage = () => {
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
                                 marginTop: '1.5rem',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'rgba(255,255,255,0.4)',
                                 padding: '0.8rem 1.2rem',
                                 borderRadius: '10px',
                                 border: '1px solid var(--border-card)',

@@ -80,6 +80,7 @@ const PersonalAssignmentsSummaryPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEncargos, setSelectedEncargos] = useState([]);
     const [encargoSearchFilter, setEncargoSearchFilter] = useState('');
+    const [encargoStatusFilter, setEncargoStatusFilter] = useState('all'); // 'active', 'completed', 'all'
     const [personalStatusFilter, setPersonalStatusFilter] = useState('all'); // 'active', 'inactive', 'all'
     const [onlyActiveAssignments, setOnlyActiveAssignments] = useState(false);
     const [isEncargoDropdownOpen, setIsEncargoDropdownOpen] = useState(false);
@@ -245,12 +246,19 @@ const PersonalAssignmentsSummaryPage = () => {
                 }
             }
 
-            // 2. Personal status filter
+            // 2. Encargo status filter based on the actual completion date
+            const hasRealEndDate = item.FIN_REAL_ENCARGO !== null &&
+                item.FIN_REAL_ENCARGO !== undefined &&
+                String(item.FIN_REAL_ENCARGO).trim() !== '';
+            if (encargoStatusFilter === 'completed' && !hasRealEndDate) return false;
+            if (encargoStatusFilter === 'active' && hasRealEndDate) return false;
+
+            // 3. Personal status filter
             const isPersonActive = String(item.ACTIVO || '').trim().toUpperCase() === 'S';
             if (personalStatusFilter === 'active' && !isPersonActive) return false;
             if (personalStatusFilter === 'inactive' && isPersonActive) return false;
 
-            // 3. Only active assignments filter
+            // 4. Only active assignments filter
             if (onlyActiveAssignments && item.BAJA_ASIGNACION) {
                 // If assignment has a baja date in the past or today, filter out
                 const bajaDate = new Date(item.BAJA_ASIGNACION);
@@ -259,7 +267,7 @@ const PersonalAssignmentsSummaryPage = () => {
                 }
             }
 
-            // 4. Global search term filter
+            // 5. Global search term filter
             if (searchTerm) {
                 const s = normalizeString(searchTerm);
                 const matchName = normalizeString(item.NOMBRE_COMPLETO).includes(s);
@@ -280,7 +288,7 @@ const PersonalAssignmentsSummaryPage = () => {
 
             return true;
         });
-    }, [combinedData, selectedEncargos, personalStatusFilter, onlyActiveAssignments, searchTerm]);
+    }, [combinedData, selectedEncargos, encargoStatusFilter, personalStatusFilter, onlyActiveAssignments, searchTerm]);
 
     // Sort data
     const sortedData = useMemo(() => {
@@ -373,13 +381,22 @@ const PersonalAssignmentsSummaryPage = () => {
     };
 
     const filteredEncargosOptions = useMemo(() => {
-        if (!encargoSearchFilter) return encargosList;
+        const optionsByStatus = encargosList.filter(e => {
+            const hasRealEndDate = e.FIN_REAL !== null &&
+                e.FIN_REAL !== undefined &&
+                String(e.FIN_REAL).trim() !== '';
+            if (encargoStatusFilter === 'completed') return hasRealEndDate;
+            if (encargoStatusFilter === 'active') return !hasRealEndDate;
+            return true;
+        });
+
+        if (!encargoSearchFilter) return optionsByStatus;
         const s = normalizeString(encargoSearchFilter);
-        return encargosList.filter(e => 
-            normalizeString(String(e.CODIGOPR || '')).includes(s) || 
+        return optionsByStatus.filter(e =>
+            normalizeString(String(e.CODIGOPR || '')).includes(s) ||
             normalizeString(String(e.NOMBRE || '')).includes(s)
         );
-    }, [encargosList, encargoSearchFilter]);
+    }, [encargosList, encargoSearchFilter, encargoStatusFilter]);
 
     // Sort column click handler
     const handleSort = (key) => {
@@ -985,7 +1002,35 @@ const PersonalAssignmentsSummaryPage = () => {
                     </AnimatePresence>
                 </div>
 
-                {/* 3. Personal Status & Vigencia Filter */}
+                {/* 3. Encargo Status Filter */}
+                <div className="glass-card" style={{ padding: '0.8rem 1rem' }}>
+                    <p style={{ fontSize: '0.8rem', marginBottom: '0.4rem', color: 'var(--text-muted)' }}>Estado del Encargo:</p>
+                    <div style={{ display: 'flex', background: 'var(--input-bg)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border-card)' }}>
+                        <button
+                            onClick={() => { setEncargoStatusFilter('active'); setCurrentPage(1); }}
+                            className={`btn ${encargoStatusFilter === 'active' ? 'btn-primary' : ''}`}
+                            style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: encargoStatusFilter === 'active' ? '' : 'transparent', color: encargoStatusFilter === 'active' ? '#fff' : 'var(--text-muted)' }}
+                        >
+                            Activos
+                        </button>
+                        <button
+                            onClick={() => { setEncargoStatusFilter('completed'); setCurrentPage(1); }}
+                            className={`btn ${encargoStatusFilter === 'completed' ? 'btn-primary' : ''}`}
+                            style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: encargoStatusFilter === 'completed' ? '' : 'transparent', color: encargoStatusFilter === 'completed' ? '#fff' : 'var(--text-muted)' }}
+                        >
+                            Finalizados
+                        </button>
+                        <button
+                            onClick={() => { setEncargoStatusFilter('all'); setCurrentPage(1); }}
+                            className={`btn ${encargoStatusFilter === 'all' ? 'btn-primary' : ''}`}
+                            style={{ flex: 1, padding: '0.3rem', fontSize: '0.75rem', background: encargoStatusFilter === 'all' ? '' : 'transparent', color: encargoStatusFilter === 'all' ? '#fff' : 'var(--text-muted)' }}
+                        >
+                            Todos
+                        </button>
+                    </div>
+                </div>
+
+                {/* 4. Personal Status & Vigencia Filter */}
                 <div className="glass-card" style={{ padding: '0.8rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <p style={{ fontSize: '0.8rem', marginBottom: '0.4rem', color: 'var(--text-muted)' }}>Estado del Personal & Asignación:</p>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

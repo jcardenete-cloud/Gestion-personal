@@ -167,6 +167,7 @@ const MedicionesPage = () => {
   const [assignments, setAssignments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [selectedCode, setSelectedCode] = useState('');
+  const [inforFilter, setInforFilter] = useState('S');
   const [fileName, setFileName] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
@@ -197,9 +198,19 @@ const MedicionesPage = () => {
     return () => { active = false; };
   }, []);
 
+  const openAssignments = useMemo(
+    () => assignments.filter((item) => {
+      const isOpen = item.FIN_REAL === null || item.FIN_REAL === undefined || item.FIN_REAL === '';
+      const infor = String(item.INFOR || '').trim().toUpperCase();
+      const matchesInfor = inforFilter === 'BOTH' ||
+        (inforFilter === 'S' ? infor === 'S' : infor !== 'S');
+      return isOpen && matchesInfor;
+    }),
+    [assignments, inforFilter]
+  );
   const selectedAssignment = useMemo(
-    () => assignments.find((item) => String(item.CODIGOPR) === selectedCode),
-    [assignments, selectedCode]
+    () => openAssignments.find((item) => String(item.CODIGOPR) === selectedCode),
+    [openAssignments, selectedCode]
   );
   const unresolvedRecords = useMemo(
     () => parsedData?.records.filter((record) => !record.employee) || [],
@@ -252,6 +263,16 @@ const MedicionesPage = () => {
 
   const handleAssignmentChange = (event) => {
     setSelectedCode(event.target.value);
+    setParsedData(null);
+    setManualSelections({});
+    setFileName('');
+    setErrorMessage('');
+    setSuccessMessage('');
+  };
+
+  const handleInforFilterChange = (event) => {
+    setInforFilter(event.target.value);
+    setSelectedCode('');
     setParsedData(null);
     setManualSelections({});
     setFileName('');
@@ -312,7 +333,20 @@ const MedicionesPage = () => {
       )}
 
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+            Tipo de gestión (INFOR)
+            <select
+              value={inforFilter}
+              onChange={handleInforFilterChange}
+              disabled={loading || processing || saving}
+              style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+            >
+              <option value="S">Gestión directa</option>
+              <option value="N">No gestión directa</option>
+              <option value="BOTH">Todos</option>
+            </select>
+          </label>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
             Encargo
             <select
@@ -322,12 +356,17 @@ const MedicionesPage = () => {
               style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
             >
               <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
-              {assignments.map((assignment) => (
+              {openAssignments.map((assignment) => (
                 <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
                   {assignment.CODIGOPR} — {assignment.NOMBRE}
                 </option>
               ))}
             </select>
+            {!loading && openAssignments.length === 0 && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+                No hay encargos abiertos para este filtro.
+              </span>
+            )}
           </label>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
             Hoja de horas

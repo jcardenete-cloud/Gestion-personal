@@ -358,7 +358,7 @@ const PlanificacionPage = () => {
     )
     : [];
   const mappedEmployeeIds = new Set([
-    ...assignmentRows
+    ...(assignmentRows || [])
       .filter((assignment) => {
         const person = peopleByRef.get(String(assignment.REF_PER));
         return person?.PERFIL && person?.NOMBRE;

@@ -12,6 +12,11 @@ const normalize = (value) => String(value ?? '')
   .trim()
   .replace(/\s+/g, ' ');
 
+const formatHours = (hours) => hours.toLocaleString('es-ES', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 const parseInteger = (value, fieldName) => {
   const parsed = Number.parseInt(String(value ?? '').trim(), 10);
   if (!Number.isInteger(parsed)) {
@@ -41,17 +46,15 @@ const getEmployeeKeys = (employee) => {
   ].filter(Boolean);
 };
 
-const parseWorkbook = (workbook, selectedAssignment, employees, assignedEmployees) => {
+const parseWorkbook = (workbook, projectAssignment, employees, assignedEmployees) => {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) throw new Error('El libro de Excel no contiene ninguna hoja.');
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
 
   const projectTitle = String(rows[2]?.[0] ?? '').trim();
   const projectCode = projectTitle.match(/^([^-]+)\s*-/)?.[1]?.trim();
-  if (!projectCode || projectCode !== String(selectedAssignment.CODIGOPR).trim()) {
-    throw new Error(
-      `El fichero indica el encargo "${projectTitle || 'sin identificar'}" y no coincide con el seleccionado (${selectedAssignment.CODIGOPR}).`
-    );
+  if (!projectCode || projectCode !== String(projectAssignment.CODIGOPR).trim()) {
+    throw new Error(`No se pudo validar el encargo indicado en el fichero "${projectTitle || 'sin identificar'}".`);
   }
 
   const headerIndex = rows.findIndex((row) => {
@@ -121,6 +124,8 @@ const parseWorkbook = (workbook, selectedAssignment, employees, assignedEmployee
   }
 
   return {
+    codigopr: String(projectAssignment.CODIGOPR),
+    encargoNombre: projectAssignment.NOMBRE,
     anio: year,
     mes: month,
     records,
@@ -166,8 +171,6 @@ const MedicionesPage = () => {
   const { isReadOnly } = useAuth();
   const [assignments, setAssignments] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [selectedCode, setSelectedCode] = useState('');
-  const [inforFilter, setInforFilter] = useState('S');
   const [fileName, setFileName] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
@@ -198,20 +201,6 @@ const MedicionesPage = () => {
     return () => { active = false; };
   }, []);
 
-  const openAssignments = useMemo(
-    () => assignments.filter((item) => {
-      const isOpen = item.FIN_REAL === null || item.FIN_REAL === undefined || item.FIN_REAL === '';
-      const infor = String(item.INFOR || '').trim().toUpperCase();
-      const matchesInfor = inforFilter === 'BOTH' ||
-        (inforFilter === 'S' ? infor === 'S' : infor !== 'S');
-      return isOpen && matchesInfor;
-    }),
-    [assignments, inforFilter]
-  );
-  const selectedAssignment = useMemo(
-    () => openAssignments.find((item) => String(item.CODIGOPR) === selectedCode),
-    [openAssignments, selectedCode]
-  );
   const unresolvedRecords = useMemo(
     () => parsedData?.records.filter((record) => !record.employee) || [],
     [parsedData]
@@ -229,12 +218,6 @@ const MedicionesPage = () => {
     setSuccessMessage('');
     setFileName(file?.name || '');
     if (!file) return;
-    if (!selectedAssignment) {
-      setErrorMessage('Selecciona primero el encargo al que pertenece el fichero.');
-      event.target.value = '';
-      setFileName('');
-      return;
-    }
     if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) {
       setErrorMessage('Selecciona un fichero Excel con extensión .xlsx, .xls o .xlsm.');
       event.target.value = '';
@@ -245,10 +228,24 @@ const MedicionesPage = () => {
     setProcessing(true);
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const assignmentResponse = await api.getAssignments(selectedAssignment.CODIGOPR);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) throw new Error('El libro de Excel no contiene ninguna hoja.');
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+      const projectTitle = String(rows[2]?.[0] ?? '').trim();
+      const projectCode = projectTitle.match(/^([^-]+)\s*-/)?.[1]?.trim();
+      if (!projectCode) {
+        throw new Error(`No se encontró un código de encargo válido en la hoja ("${projectTitle || 'sin identificar'}").`);
+      }
+      const projectAssignment = assignments.find(
+        (assignment) => String(assignment.CODIGOPR).trim() === projectCode
+      );
+      if (!projectAssignment) {
+        throw new Error(`El encargo ${projectCode} indicado en la hoja no existe en la base de datos.`);
+      }
+      const assignmentResponse = await api.getAssignments(projectAssignment.CODIGOPR);
       setParsedData(parseWorkbook(
         workbook,
-        selectedAssignment,
+        projectAssignment,
         employees,
         assignmentResponse.data
       ));
@@ -261,33 +258,14 @@ const MedicionesPage = () => {
     }
   };
 
-  const handleAssignmentChange = (event) => {
-    setSelectedCode(event.target.value);
-    setParsedData(null);
-    setManualSelections({});
-    setFileName('');
-    setErrorMessage('');
-    setSuccessMessage('');
-  };
-
-  const handleInforFilterChange = (event) => {
-    setInforFilter(event.target.value);
-    setSelectedCode('');
-    setParsedData(null);
-    setManualSelections({});
-    setFileName('');
-    setErrorMessage('');
-    setSuccessMessage('');
-  };
-
   const handleSave = async () => {
-    if (!result || result.error || !selectedAssignment || isReadOnly) return;
+    if (!result || result.error || !parsedData || isReadOnly) return;
     setSaving(true);
     setErrorMessage('');
     setSuccessMessage('');
     try {
       const records = result.aggregates.map(({ perfil, horas }) => ({
-        codigopr: String(selectedAssignment.CODIGOPR),
+        codigopr: parsedData.codigopr,
         anio: result.anio,
         mes: result.mes,
         perfil,
@@ -295,7 +273,7 @@ const MedicionesPage = () => {
       }));
       await api.saveMediciones(records);
       setSuccessMessage(
-        `Se han guardado ${records.length} perfiles para ${String(result.mes).padStart(2, '0')}/${result.anio}. Si ya existían, sus valores se han actualizado.`
+        `Se han guardado ${records.length} perfiles del encargo ${parsedData.codigopr} para ${String(result.mes).padStart(2, '0')}/${result.anio}. Si ya existían, sus valores se han actualizado.`
       );
     } catch (error) {
       setErrorMessage(`No se pudieron guardar las mediciones: ${error.message}`);
@@ -309,7 +287,7 @@ const MedicionesPage = () => {
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>Mediciones por perfil</h2>
         <p style={{ color: 'var(--text-muted)' }}>
-          Selecciona un encargo y carga el Excel de horas para obtener el total mensual por perfil.
+          Carga el Excel de horas para identificar el encargo automáticamente y obtener el total mensual por perfil.
         </p>
       </div>
 
@@ -333,50 +311,15 @@ const MedicionesPage = () => {
       )}
 
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
-            Tipo de gestión (INFOR)
-            <select
-              value={inforFilter}
-              onChange={handleInforFilterChange}
-              disabled={loading || processing || saving}
-              style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
-            >
-              <option value="S">Gestión directa</option>
-              <option value="N">No gestión directa</option>
-              <option value="BOTH">Todos</option>
-            </select>
-          </label>
-          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
-            Encargo
-            <select
-              value={selectedCode}
-              onChange={handleAssignmentChange}
-              disabled={loading || processing || saving}
-              style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
-            >
-              <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
-              {openAssignments.map((assignment) => (
-                <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
-                  {assignment.CODIGOPR} — {assignment.NOMBRE}
-                </option>
-              ))}
-            </select>
-            {!loading && openAssignments.length === 0 && (
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                No hay encargos abiertos para este filtro.
-              </span>
-            )}
-          </label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr)', gap: '1rem' }}>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
             Hoja de horas
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400 }}>
               <input
-                key={selectedCode}
                 type="file"
                 accept=".xlsx,.xls,.xlsm"
                 onChange={handleFileChange}
-                disabled={!selectedAssignment || loading || processing || saving}
+                disabled={loading || processing || saving}
                 style={{ maxWidth: '100%' }}
               />
             </span>
@@ -421,7 +364,7 @@ const MedicionesPage = () => {
                 <span>
                   <strong>{record.name}</strong>
                   <span style={{ display: 'block', color: 'var(--text-muted)' }}>
-                    Fila {record.id} · {record.hours.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h
+                    Fila {record.id} · {formatHours(record.hours)} h
                   </span>
                 </span>
                 <select
@@ -458,14 +401,17 @@ const MedicionesPage = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
             <div>
               <h3 style={{ fontSize: '1.1rem', marginBottom: '0.3rem' }}>
-                {String(result.mes).padStart(2, '0')}/{result.anio} — {selectedAssignment?.NOMBRE}
+                Encargo {parsedData.codigopr} — {parsedData.encargoNombre}
               </h3>
+              <p style={{ marginBottom: '0.3rem' }}>
+                {String(result.mes).padStart(2, '0')}/{result.anio}
+              </p>
               <p style={{ color: 'var(--text-muted)' }}>
                 {result.importedCount} empleados asociados · {result.aggregates.length} perfiles
               </p>
             </div>
             <p style={{ fontWeight: 600 }}>
-              Total: {result.aggregates.reduce((sum, item) => sum + item.horas, 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h
+              Total: {formatHours(result.aggregates.reduce((sum, item) => sum + item.horas, 0))} h
             </p>
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -483,7 +429,7 @@ const MedicionesPage = () => {
                     <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>{item.perfil}</td>
                     <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>{item.empleados}</td>
                     <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>
-                      {item.horas.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatHours(item.horas)}
                     </td>
                   </tr>
                 ))}

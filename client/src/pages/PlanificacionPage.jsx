@@ -311,10 +311,12 @@ const PlanificacionPage = () => {
         employees.filter(isActiveEmployee).map((employee) => String(employee.REF_PER))
       );
       const activeAssignments = response.data.filter(
-        (assignment) => activeRefs.has(String(assignment.REF_PER))
+        (assignment) =>
+          activeRefs.has(String(assignment.REF_PER)) &&
+          (assignment.BAJA === null || assignment.BAJA === undefined || assignment.BAJA === '')
       );
       if (activeAssignments.length === 0) {
-        throw new Error('El encargo no tiene empleados activos (ACTIVO = S) asignados.');
+        throw new Error('El encargo no tiene empleados activos (ACTIVO = S) y sin fecha de baja asignados.');
       }
       setAssignmentRows(activeAssignments);
     } catch (error) {

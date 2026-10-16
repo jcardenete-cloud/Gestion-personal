@@ -3,7 +3,8 @@ import { HashRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban,
     Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight,
-    ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck
+    ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck,
+    ChartNoAxesColumn
 } from 'lucide-react';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
@@ -16,6 +17,7 @@ import UsuariosPage from './pages/UsuariosPage';
 import logo from './assets/tragsa_logo.png';
 import LoginPage from './pages/LoginPage';
 import PersonalAssignmentsSummaryPage from './pages/PersonalAssignmentsSummaryPage';
+import MedicionesPage from './pages/MedicionesPage';
 import { useAuth } from './AuthContext';
 
 function App() {
@@ -144,6 +146,9 @@ function App() {
         <NavLink to="/vacaciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Calendar size={18} /> {isExpanded && <span>Vacaciones</span>}
         </NavLink>
+        <NavLink to="/mediciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <ChartNoAxesColumn size={18} /> {isExpanded && <span>Mediciones</span>}
+        </NavLink>
 
         {/* Usuarios page: only visible to admins */}
         {isAdmin && (
@@ -222,6 +227,7 @@ function App() {
           <Route path="/ubicacion" element={<UbicacionPage />} />
           <Route path="/personal-ubicacion" element={<PersonalByLocationPage />} />
           <Route path="/vacaciones" element={<VacacionesPage />} />
+          <Route path="/mediciones" element={<MedicionesPage />} />
           {isAdmin && <Route path="/usuarios" element={<UsuariosPage />} />}
         </Routes>
       </main>

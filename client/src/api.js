@@ -131,6 +131,15 @@ const updateEncargo = (data) =>
 const deleteEncargo = (id) =>
   deleteRow('ENCARGOS', { CODIGOPR: id });
 
+const saveMediciones = async (rows) => {
+  const payload = rows.map(lower);
+  const { data, error } = await table('MEDICIONES')
+    .upsert(payload, { onConflict: 'codigopr,anio,mes,perfil' })
+    .select();
+  throwIfError({ error });
+  return { data: normalizeKeys(data || []) };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -470,6 +479,7 @@ const api = {
   createEncargo,
   updateEncargo,
   deleteEncargo,
+  saveMediciones,
 
   // Personal
   getPersonal,

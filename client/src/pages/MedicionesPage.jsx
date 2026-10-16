@@ -41,7 +41,7 @@ const getEmployeeKeys = (employee) => {
   ].filter(Boolean);
 };
 
-const parseWorkbook = (workbook, selectedAssignment, employees) => {
+const parseWorkbook = (workbook, selectedAssignment, employees, assignedEmployees) => {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) throw new Error('El libro de Excel no contiene ninguna hoja.');
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
@@ -81,9 +81,7 @@ const parseWorkbook = (workbook, selectedAssignment, employees) => {
 
   let year;
   let month;
-  const unmatched = [];
-  const aggregates = new Map();
-  let importedCount = 0;
+  const records = [];
 
   rows.slice(headerIndex + 1).forEach((row, index) => {
     const employeeName = String(row[nameIndex] ?? '').trim();
@@ -106,46 +104,58 @@ const parseWorkbook = (workbook, selectedAssignment, employees) => {
       String(employee.REF_PER),
       employee,
     ])).values()];
-    if (uniqueCandidates.length !== 1) {
-      unmatched.push({
-        name: employeeName,
-        reason: uniqueCandidates.length ? 'coincidencia ambigua' : 'no encontrado',
-      });
-      return;
-    }
-
     const hours = parseHours(row[hoursIndex]);
     if (hours === null || hours < 0) {
       throw new Error(`Las horas H.MES de "${employeeName}" no son válidas.`);
     }
-    const profile = String(uniqueCandidates[0].PERFIL ?? '').trim();
-    if (!profile) {
-      throw new Error(`El empleado "${employeeName}" no tiene perfil asignado en la base de datos.`);
-    }
-
-    const profileKey = normalize(profile);
-    const aggregate = aggregates.get(profileKey) || { perfil: profile, horas: 0, empleados: 0 };
-    aggregate.horas += hours;
-    aggregate.empleados += 1;
-    aggregates.set(profileKey, aggregate);
-    importedCount += 1;
+    records.push({
+      id: headerIndex + index + 2,
+      name: employeeName,
+      hours,
+      employee: uniqueCandidates.length === 1 ? uniqueCandidates[0] : null,
+    });
   });
 
-  if (year === undefined || importedCount === 0) {
+  if (year === undefined || records.length === 0) {
     throw new Error('No se encontraron filas de empleados con horas para importar.');
-  }
-  if (unmatched.length) {
-    const names = unmatched.slice(0, 8).map(({ name, reason }) => `${name} (${reason})`).join(', ');
-    const suffix = unmatched.length > 8 ? ` y ${unmatched.length - 8} más` : '';
-    throw new Error(
-      `${unmatched.length} empleado(s) no se pudieron asociar de forma unívoca al personal: ${names}${suffix}. No se han calculado mediciones.`
-    );
   }
 
   return {
     anio: year,
     mes: month,
-    importedCount,
+    records,
+    assignedEmployees: [...new Map(assignedEmployees.map((employee) => [
+      String(employee.REF_PER),
+      employee,
+    ])).values()],
+  };
+};
+
+const buildMeasurementResult = (parsedData, manualSelections) => {
+  if (!parsedData) return null;
+
+  const aggregates = new Map();
+  for (const record of parsedData.records) {
+    const employee = record.employee || parsedData.assignedEmployees.find(
+      (candidate) => String(candidate.REF_PER) === manualSelections[record.id]
+    );
+    if (!employee) return null;
+
+    const profile = String(employee.PERFIL ?? '').trim();
+    if (!profile) {
+      return { error: `El empleado seleccionado para "${record.name}" no tiene perfil asignado en la base de datos.` };
+    }
+    const profileKey = normalize(profile);
+    const aggregate = aggregates.get(profileKey) || { perfil: profile, horas: 0, empleados: 0 };
+    aggregate.horas += record.hours;
+    aggregate.empleados += 1;
+    aggregates.set(profileKey, aggregate);
+  }
+
+  return {
+    anio: parsedData.anio,
+    mes: parsedData.mes,
+    importedCount: parsedData.records.length,
     aggregates: [...aggregates.values()]
       .map((item) => ({ ...item, horas: Math.round((item.horas + Number.EPSILON) * 100) / 100 }))
       .sort((a, b) => a.perfil.localeCompare(b.perfil, 'es')),
@@ -158,7 +168,8 @@ const MedicionesPage = () => {
   const [employees, setEmployees] = useState([]);
   const [selectedCode, setSelectedCode] = useState('');
   const [fileName, setFileName] = useState('');
-  const [result, setResult] = useState(null);
+  const [parsedData, setParsedData] = useState(null);
+  const [manualSelections, setManualSelections] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -190,10 +201,19 @@ const MedicionesPage = () => {
     () => assignments.find((item) => String(item.CODIGOPR) === selectedCode),
     [assignments, selectedCode]
   );
+  const unresolvedRecords = useMemo(
+    () => parsedData?.records.filter((record) => !record.employee) || [],
+    [parsedData]
+  );
+  const result = useMemo(
+    () => buildMeasurementResult(parsedData, manualSelections),
+    [parsedData, manualSelections]
+  );
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
-    setResult(null);
+    setParsedData(null);
+    setManualSelections({});
     setErrorMessage('');
     setSuccessMessage('');
     setFileName(file?.name || '');
@@ -214,7 +234,13 @@ const MedicionesPage = () => {
     setProcessing(true);
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      setResult(parseWorkbook(workbook, selectedAssignment, employees));
+      const assignmentResponse = await api.getAssignments(selectedAssignment.CODIGOPR);
+      setParsedData(parseWorkbook(
+        workbook,
+        selectedAssignment,
+        employees,
+        assignmentResponse.data
+      ));
     } catch (error) {
       setErrorMessage(`No se pudo procesar el fichero: ${error.message}`);
       setFileName('');
@@ -226,14 +252,15 @@ const MedicionesPage = () => {
 
   const handleAssignmentChange = (event) => {
     setSelectedCode(event.target.value);
-    setResult(null);
+    setParsedData(null);
+    setManualSelections({});
     setFileName('');
     setErrorMessage('');
     setSuccessMessage('');
   };
 
   const handleSave = async () => {
-    if (!result || !selectedAssignment || isReadOnly) return;
+    if (!result || result.error || !selectedAssignment || isReadOnly) return;
     setSaving(true);
     setErrorMessage('');
     setSuccessMessage('');
@@ -277,6 +304,12 @@ const MedicionesPage = () => {
           <span>{successMessage}</span>
         </div>
       )}
+      {result?.error && (
+        <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span>{result.error}</span>
+        </div>
+      )}
 
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
@@ -316,7 +349,7 @@ const MedicionesPage = () => {
             {processing && <span>— procesando…</span>}
           </p>
         )}
-        {!isReadOnly && result && (
+        {!isReadOnly && result && !result.error && (
           <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginTop: '1rem' }}>
             {saving ? <Upload size={17} /> : <Save size={17} />}
             {saving ? 'Guardando…' : 'Guardar mediciones'}
@@ -329,7 +362,59 @@ const MedicionesPage = () => {
         )}
       </section>
 
-      {result && (
+      {parsedData && unresolvedRecords.length > 0 && (
+        <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.4rem' }}>Asociar empleados</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            No se pudo identificar de forma única a {unresolvedRecords.length} empleado(s) del Excel. Selecciona para cada fila a la persona asignada a este encargo.
+          </p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Resueltas: {unresolvedRecords.filter((record) => manualSelections[record.id]).length} de {unresolvedRecords.length}
+          </p>
+          {parsedData.assignedEmployees.length === 0 && (
+            <div role="alert" style={{ marginBottom: '1rem', color: '#b42318' }}>
+              Este encargo no tiene empleados asignados disponibles para resolver las coincidencias.
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: '0.85rem' }}>
+            {unresolvedRecords.map((record) => (
+              <label key={record.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) minmax(260px, 2fr)', gap: '0.8rem', alignItems: 'center' }}>
+                <span>
+                  <strong>{record.name}</strong>
+                  <span style={{ display: 'block', color: 'var(--text-muted)' }}>
+                    Fila {record.id} · {record.hours.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h
+                  </span>
+                </span>
+                <select
+                  value={manualSelections[record.id] || ''}
+                  onChange={(event) => {
+                    const selectedRef = event.target.value;
+                    setManualSelections((current) => {
+                      const updated = { ...current };
+                      if (selectedRef) updated[record.id] = selectedRef;
+                      else delete updated[record.id];
+                      return updated;
+                    });
+                    setSuccessMessage('');
+                  }}
+                  disabled={processing || saving || parsedData.assignedEmployees.length === 0}
+                  style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+                >
+                  <option value="">Selecciona un empleado asignado</option>
+                  {parsedData.assignedEmployees.map((employee) => (
+                    <option key={employee.REF_PER} value={String(employee.REF_PER)}>
+                      {[employee.NOMBRE, employee.APELLIDO1, employee.APELLIDO2].filter(Boolean).join(' ')}
+                      {employee.PERFIL ? ` — ${employee.PERFIL}` : ' — Sin perfil'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {result && !result.error && (
         <section className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
             <div>

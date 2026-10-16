@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban,
     Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight,
     ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck,
-    ChartNoAxesColumn
+    ChartNoAxesColumn, CalendarRange
 } from 'lucide-react';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
@@ -18,6 +18,7 @@ import logo from './assets/tragsa_logo.png';
 import LoginPage from './pages/LoginPage';
 import PersonalAssignmentsSummaryPage from './pages/PersonalAssignmentsSummaryPage';
 import MedicionesPage from './pages/MedicionesPage';
+import PlanificacionPage from './pages/PlanificacionPage';
 import { useAuth } from './AuthContext';
 
 function App() {
@@ -149,6 +150,9 @@ function App() {
         <NavLink to="/mediciones" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <ChartNoAxesColumn size={18} /> {isExpanded && <span>Mediciones</span>}
         </NavLink>
+        <NavLink to="/planificacion" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <CalendarRange size={18} /> {isExpanded && <span>Planificación</span>}
+        </NavLink>
 
         {/* Usuarios page: only visible to admins */}
         {isAdmin && (
@@ -228,6 +232,7 @@ function App() {
           <Route path="/personal-ubicacion" element={<PersonalByLocationPage />} />
           <Route path="/vacaciones" element={<VacacionesPage />} />
           <Route path="/mediciones" element={<MedicionesPage />} />
+          <Route path="/planificacion" element={<PlanificacionPage />} />
           {isAdmin && <Route path="/usuarios" element={<UsuariosPage />} />}
         </Routes>
       </main>

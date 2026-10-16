@@ -140,6 +140,23 @@ const saveMediciones = async (rows) => {
   return { data: normalizeKeys(data || []) };
 };
 
+const savePlanificacion = async (rows) => {
+  const payload = rows.map(lower);
+  const { data, error } = await table('PLANIFICACION')
+    .upsert(payload, { onConflict: 'codigopr,anio,mes,perfil' })
+    .select();
+  throwIfError({ error });
+  return { data: normalizeKeys(data || []) };
+};
+
+const getPlanningConfig = async () => {
+  const { data, error } = await table('CONFIG')
+    .select('hours_per_week,hours_per_week_summer')
+    .limit(2);
+  throwIfError({ error });
+  return { data: normalizeKeys(data || []) };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -480,6 +497,8 @@ const api = {
   updateEncargo,
   deleteEncargo,
   saveMediciones,
+  savePlanificacion,
+  getPlanningConfig,
 
   // Personal
   getPersonal,

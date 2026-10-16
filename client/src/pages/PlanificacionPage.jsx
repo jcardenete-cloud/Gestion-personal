@@ -16,6 +16,9 @@ const formatHours = (hours) => hours.toLocaleString('es-ES', {
   maximumFractionDigits: 2,
 });
 
+const isActiveEmployee = (employee) =>
+  String(employee?.ACTIVO ?? '').trim().toUpperCase() === 'S';
+
 const toDateString = (date) => date.toISOString().slice(0, 10);
 
 const parseMonth = (value) => {
@@ -62,9 +65,10 @@ const getEmployeeSchedule = (assignmentRows, employees, manualSelections) => {
   const peopleByRef = new Map(employees.map((person) => [String(person.REF_PER), person]));
   return assignmentRows.map((assignment) => {
     const linkedEmployee = peopleByRef.get(String(assignment.REF_PER));
-    const employee = linkedEmployee?.PERFIL && linkedEmployee?.NOMBRE
+    const selectedEmployee = peopleByRef.get(manualSelections[String(assignment.REF_PER)]);
+    const employee = isActiveEmployee(linkedEmployee) && linkedEmployee?.PERFIL && linkedEmployee?.NOMBRE
       ? linkedEmployee
-      : peopleByRef.get(manualSelections[String(assignment.REF_PER)]);
+      : isActiveEmployee(selectedEmployee) ? selectedEmployee : null;
     return { assignment, employee: employee || null };
   });
 };
@@ -303,7 +307,16 @@ const PlanificacionPage = () => {
       if (response.data.length === 0) {
         throw new Error('El encargo seleccionado no tiene empleados asignados.');
       }
-      setAssignmentRows(response.data);
+      const activeRefs = new Set(
+        employees.filter(isActiveEmployee).map((employee) => String(employee.REF_PER))
+      );
+      const activeAssignments = response.data.filter(
+        (assignment) => activeRefs.has(String(assignment.REF_PER))
+      );
+      if (activeAssignments.length === 0) {
+        throw new Error('El encargo no tiene empleados activos (ACTIVO = S) asignados.');
+      }
+      setAssignmentRows(activeAssignments);
     } catch (error) {
       setErrorMessage(`No se pudo preparar la planificación: ${error.message}`);
     } finally {
@@ -348,7 +361,7 @@ const PlanificacionPage = () => {
   const candidateEmployees = assignmentRows
     ? [...new Map(assignmentRows
       .map((assignment) => peopleByRef.get(String(assignment.REF_PER)))
-      .filter((person) => person?.PERFIL && person?.NOMBRE)
+      .filter((person) => isActiveEmployee(person) && person?.PERFIL && person?.NOMBRE)
       .map((person) => [String(person.REF_PER), person])).values()]
       .sort((a, b) =>
       `${a.APELLIDO1 || ''} ${a.APELLIDO2 || ''} ${a.NOMBRE || ''}`.localeCompare(
@@ -361,7 +374,7 @@ const PlanificacionPage = () => {
     ...(assignmentRows || [])
       .filter((assignment) => {
         const person = peopleByRef.get(String(assignment.REF_PER));
-        return person?.PERFIL && person?.NOMBRE;
+        return isActiveEmployee(person) && person?.PERFIL && person?.NOMBRE;
       })
       .map((assignment) => String(assignment.REF_PER)),
     ...Object.values(manualSelections),

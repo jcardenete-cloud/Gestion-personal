@@ -315,7 +315,7 @@ const PlanificacionPage = () => {
     const months = new Set([currentMonth]);
     savedPlanning.forEach((row) => {
       const monthKey = `${row.ANIO}-${String(row.MES).padStart(2, '0')}`;
-      if (monthKey <= currentMonth) months.add(monthKey);
+      months.add(monthKey);
     });
     return [...months].sort();
   }, [savedPlanning, currentMonth]);

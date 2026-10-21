@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarRange, CheckCircle2, Save, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  CalendarDays,
+  CalendarRange,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Users,
+} from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../AuthContext';
 
@@ -209,12 +218,19 @@ const PlanificacionPage = () => {
   const [holidays, setHolidays] = useState([]);
   const [config, setConfig] = useState([]);
   const [selectedCode, setSelectedCode] = useState('');
+  const [activeTab, setActiveTab] = useState('calculation');
+  const [consultationCode, setConsultationCode] = useState('');
+  const [savedPlanning, setSavedPlanning] = useState([]);
+  const [consultationMonth, setConsultationMonth] = useState(currentMonth);
+  const [consultationLoading, setConsultationLoading] = useState(false);
+  const [consultationError, setConsultationError] = useState('');
   const [monthValue, setMonthValue] = useState(currentMonth);
   const [assignmentRows, setAssignmentRows] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dataErrorMessage, setDataErrorMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -240,7 +256,7 @@ const PlanificacionPage = () => {
         setHolidays(holidayResponse.data);
         setConfig(configResponse.data);
       } catch (error) {
-        if (active) setErrorMessage(`No se pudieron cargar los datos de planificación: ${error.message}`);
+        if (active) setDataErrorMessage(`No se pudieron cargar los datos de planificación: ${error.message}`);
       } finally {
         if (active) setLoading(false);
       }
@@ -248,6 +264,32 @@ const PlanificacionPage = () => {
     loadData();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'consultation' || !consultationCode) {
+      setSavedPlanning([]);
+      setConsultationLoading(false);
+      setConsultationError('');
+      return undefined;
+    }
+
+    let active = true;
+    setSavedPlanning([]);
+    setConsultationLoading(true);
+    setConsultationError('');
+    api.getPlanificacion(consultationCode)
+      .then((response) => {
+        if (active) setSavedPlanning(response.data);
+      })
+      .catch((error) => {
+        if (active) setConsultationError(`No se pudo cargar la planificación guardada: ${error.message}`);
+      })
+      .finally(() => {
+        if (active) setConsultationLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [activeTab, consultationCode]);
 
   const sortedAssignments = useMemo(
     () => [...assignments].sort((a, b) =>
@@ -259,6 +301,32 @@ const PlanificacionPage = () => {
     () => sortedAssignments.find((item) => String(item.CODIGOPR) === selectedCode),
     [sortedAssignments, selectedCode]
   );
+  const activeProjects = useMemo(
+    () => sortedAssignments.filter((item) =>
+      item.FIN_REAL === null || item.FIN_REAL === undefined || item.FIN_REAL === ''
+    ),
+    [sortedAssignments]
+  );
+  const consultationProject = useMemo(
+    () => activeProjects.find((item) => String(item.CODIGOPR) === consultationCode),
+    [activeProjects, consultationCode]
+  );
+  const planningMonths = useMemo(() => {
+    const months = new Set([currentMonth]);
+    savedPlanning.forEach((row) => {
+      const monthKey = `${row.ANIO}-${String(row.MES).padStart(2, '0')}`;
+      if (monthKey <= currentMonth) months.add(monthKey);
+    });
+    return [...months].sort();
+  }, [savedPlanning, currentMonth]);
+  const previousPlanningMonth = [...planningMonths]
+    .reverse()
+    .find((month) => month < consultationMonth);
+  const nextPlanningMonth = planningMonths.find((month) => month > consultationMonth);
+  const consultationRows = savedPlanning
+    .filter((row) => `${row.ANIO}-${String(row.MES).padStart(2, '0')}` === consultationMonth)
+    .sort((a, b) => String(a.PERFIL).localeCompare(String(b.PERFIL), 'es'));
+  const consultationTotal = consultationRows.reduce((total, row) => total + Number(row.HORAS || 0), 0);
   const unresolvedRows = useMemo(() => {
     if (!assignmentRows) return [];
     const employeeMap = new Map(employees.map((person) => [String(person.REF_PER), person]));
@@ -391,6 +459,58 @@ const PlanificacionPage = () => {
         </p>
       </div>
 
+      {dataErrorMessage && (
+        <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span>{dataErrorMessage}</span>
+        </div>
+      )}
+
+      <div role="tablist" aria-label="Vistas de planificación" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-card)', marginBottom: '1.25rem' }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'calculation'}
+          onClick={() => setActiveTab('calculation')}
+          style={{
+            padding: '0.8rem 1rem',
+            border: 'none',
+            borderBottom: activeTab === 'calculation' ? '2px solid var(--primary)' : '2px solid transparent',
+            background: 'none',
+            color: activeTab === 'calculation' ? 'var(--primary)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontWeight: 600,
+          }}
+        >
+          <CalendarRange size={16} /> Calcular planificación
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'consultation'}
+          onClick={() => setActiveTab('consultation')}
+          style={{
+            padding: '0.8rem 1rem',
+            border: 'none',
+            borderBottom: activeTab === 'consultation' ? '2px solid var(--primary)' : '2px solid transparent',
+            background: 'none',
+            color: activeTab === 'consultation' ? 'var(--primary)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontWeight: 600,
+          }}
+        >
+          <CalendarDays size={16} /> Planificación guardada
+        </button>
+      </div>
+
+      {activeTab === 'calculation' && (
+        <>
       {errorMessage && (
         <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
           <AlertCircle size={18} style={{ flexShrink: 0 }} />
@@ -573,6 +693,117 @@ const PlanificacionPage = () => {
               </table>
             </div>
           </section>
+        </>
+      )}
+        </>
+      )}
+
+      {activeTab === 'consultation' && (
+        <>
+          <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
+            <label style={{ display: 'grid', gap: '0.45rem', maxWidth: '600px', fontWeight: 600 }}>
+              Proyecto activo
+              <select
+                value={consultationCode}
+                onChange={(event) => {
+                  setConsultationCode(event.target.value);
+                  setConsultationMonth(currentMonth);
+                }}
+                disabled={loading || consultationLoading}
+                style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+              >
+                <option value="">{loading ? 'Cargando proyectos…' : 'Selecciona un proyecto activo'}</option>
+                {activeProjects.map((project) => (
+                  <option key={project.CODIGOPR} value={String(project.CODIGOPR)}>
+                    {project.CODIGOPR} — {project.NOMBRE}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!loading && !dataErrorMessage && activeProjects.length === 0 && (
+              <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)' }}>
+                No hay proyectos activos disponibles.
+              </p>
+            )}
+          </section>
+
+          {consultationError && (
+            <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{consultationError}</span>
+            </div>
+          )}
+
+          {consultationCode && (
+            <section className="glass-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.3rem' }}>
+                    {consultationProject?.CODIGOPR} — {consultationProject?.NOMBRE}
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)' }}>Resumen mensual de horas planificadas por perfil</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setConsultationMonth(previousPlanningMonth)}
+                    disabled={!previousPlanningMonth || consultationLoading}
+                    aria-label="Ver mes anterior con planificación"
+                  >
+                    <ChevronLeft size={18} /> Anterior
+                  </button>
+                  <strong style={{ minWidth: '140px', textAlign: 'center', textTransform: 'capitalize' }}>
+                    {new Date(`${consultationMonth}-01T00:00:00`).toLocaleDateString('es-ES', {
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </strong>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setConsultationMonth(nextPlanningMonth)}
+                    disabled={!nextPlanningMonth || consultationLoading}
+                    aria-label="Ver mes siguiente con planificación"
+                  >
+                    Siguiente <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {consultationLoading ? (
+                <p style={{ color: 'var(--text-muted)' }}>Cargando planificación guardada…</p>
+              ) : consultationRows.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)' }}>
+                  No hay planificación guardada para este proyecto en este mes.
+                </p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr>
+                        {['Perfil', 'Horas planificadas'].map((heading) => (
+                          <th key={heading} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consultationRows.map((row) => (
+                        <tr key={row.PERFIL}>
+                          <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{row.PERFIL}</td>
+                          <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatHours(Number(row.HORAS))}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
+                        <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>{formatHours(consultationTotal)}</th>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
     </div>

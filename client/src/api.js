@@ -149,6 +149,9 @@ const savePlanificacion = async (rows) => {
   return { data: normalizeKeys(data || []) };
 };
 
+const getPlanificacion = (codigopr) =>
+  selectAll('PLANIFICACION', { CODIGOPR: codigopr });
+
 const getPlanningConfig = async () => {
   const { data, error } = await table('CONFIG')
     .select('hours_per_week,hours_per_week_summer')
@@ -498,6 +501,7 @@ const api = {
   deleteEncargo,
   saveMediciones,
   savePlanificacion,
+  getPlanificacion,
   getPlanningConfig,
 
   // Personal

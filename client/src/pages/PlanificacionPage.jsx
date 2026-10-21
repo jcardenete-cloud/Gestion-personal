@@ -36,6 +36,12 @@ const parseMonth = (value) => {
   return { year: Number(match[1]), month: Number(match[2]) };
 };
 
+const shiftMonth = (value, offset) => {
+  const { year, month } = parseMonth(value);
+  const shifted = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
 const toIsoDate = (value, fieldName = 'fecha') => {
   if (value === null || value === undefined || value === '') return null;
   const date = String(value).slice(0, 10);
@@ -312,21 +318,33 @@ const PlanificacionPage = () => {
     [activeProjects, consultationCode]
   );
   const planningMonths = useMemo(() => {
-    const months = new Set([currentMonth]);
-    savedPlanning.forEach((row) => {
-      const monthKey = `${row.ANIO}-${String(row.MES).padStart(2, '0')}`;
-      months.add(monthKey);
-    });
-    return [...months].sort();
-  }, [savedPlanning, currentMonth]);
+    return [...new Set(savedPlanning.map((row) =>
+      `${row.ANIO}-${String(row.MES).padStart(2, '0')}`
+    ))].sort();
+  }, [savedPlanning]);
   const previousPlanningMonth = [...planningMonths]
     .reverse()
     .find((month) => month < consultationMonth);
-  const nextPlanningMonth = planningMonths.find((month) => month > consultationMonth);
-  const consultationRows = savedPlanning
-    .filter((row) => `${row.ANIO}-${String(row.MES).padStart(2, '0')}` === consultationMonth)
-    .sort((a, b) => String(a.PERFIL).localeCompare(String(b.PERFIL), 'es'));
-  const consultationTotal = consultationRows.reduce((total, row) => total + Number(row.HORAS || 0), 0);
+  const consultationMonths = Array.from({ length: 3 }, (_, index) => shiftMonth(consultationMonth, index));
+  const consultationProfileMap = new Map();
+  const consultationHoursByProfileMonth = new Map();
+  savedPlanning.forEach((row) => {
+    const profileKey = normalize(row.PERFIL);
+    const monthKey = `${row.ANIO}-${String(row.MES).padStart(2, '0')}`;
+    const profile = consultationProfileMap.get(profileKey) || { key: profileKey, name: row.PERFIL };
+    consultationProfileMap.set(profileKey, profile);
+    const monthHours = consultationHoursByProfileMonth.get(profileKey) || new Map();
+    monthHours.set(monthKey, (monthHours.get(monthKey) || 0) + Number(row.HORAS || 0));
+    consultationHoursByProfileMonth.set(profileKey, monthHours);
+  });
+  const consultationProfiles = [...consultationProfileMap.values()]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
+  const consultationTotals = consultationMonths.map((month) =>
+    [...consultationHoursByProfileMonth.values()].reduce(
+      (total, hoursByMonth) => total + (hoursByMonth.get(month) || 0),
+      0
+    )
+  );
   const unresolvedRows = useMemo(() => {
     if (!assignmentRows) return [];
     const employeeMap = new Map(employees.map((person) => [String(person.REF_PER), person]));
@@ -749,58 +767,83 @@ const PlanificacionPage = () => {
                     className="btn"
                     onClick={() => setConsultationMonth(previousPlanningMonth)}
                     disabled={!previousPlanningMonth || consultationLoading}
-                    aria-label="Ver mes anterior con planificación"
+                    aria-label="Ver meses anteriores con planificación"
                   >
-                    <ChevronLeft size={18} /> Anterior
+                    <ChevronLeft size={18} /> Meses anteriores
                   </button>
-                  <strong style={{ minWidth: '140px', textAlign: 'center', textTransform: 'capitalize' }}>
-                    {new Date(`${consultationMonth}-01T00:00:00`).toLocaleDateString('es-ES', {
-                      month: 'long',
-                      year: 'numeric',
+                  <span style={{ textAlign: 'center', textTransform: 'capitalize' }}>
+                    {new Date(`${consultationMonths[0]}-01T12:00:00`).toLocaleDateString('es-ES', {
+                      month: 'long', year: 'numeric',
                     })}
-                  </strong>
+                    {' – '}
+                    {new Date(`${consultationMonths[2]}-01T12:00:00`).toLocaleDateString('es-ES', {
+                      month: 'long', year: 'numeric',
+                    })}
+                  </span>
                   <button
                     type="button"
                     className="btn"
-                    onClick={() => setConsultationMonth(nextPlanningMonth)}
-                    disabled={!nextPlanningMonth || consultationLoading}
-                    aria-label="Ver mes siguiente con planificación"
+                    onClick={() => setConsultationMonth((month) => shiftMonth(month, 1))}
+                    disabled={consultationLoading}
+                    aria-label="Ver meses siguientes"
                   >
-                    Siguiente <ChevronRight size={18} />
+                    Meses siguientes <ChevronRight size={18} />
                   </button>
                 </div>
               </div>
 
               {consultationLoading ? (
                 <p style={{ color: 'var(--text-muted)' }}>Cargando planificación guardada…</p>
-              ) : consultationRows.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>
-                  No hay planificación guardada para este proyecto en este mes.
-                </p>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead>
-                      <tr>
-                        {['Perfil', 'Horas planificadas'].map((heading) => (
-                          <th key={heading} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{heading}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {consultationRows.map((row) => (
-                        <tr key={row.PERFIL}>
-                          <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{row.PERFIL}</td>
-                          <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatHours(Number(row.HORAS))}</td>
+                <>
+                  {consultationProfiles.length === 0 && (
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                      No hay perfiles planificados en estos meses; los totales se muestran como cero.
+                    </p>
+                  )}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          {consultationMonths.map((month) => (
+                            <th key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>
+                              {new Date(`${month}-01T12:00:00`).toLocaleDateString('es-ES', {
+                                month: 'long', year: 'numeric',
+                              })}
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                      <tr>
-                        <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
-                        <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>{formatHours(consultationTotal)}</th>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {consultationProfiles.map((profile) => {
+                          const hoursByMonth = consultationHoursByProfileMonth.get(profile.key);
+                          return (
+                            <tr key={profile.key}>
+                              <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.name}</td>
+                              {consultationMonths.map((month) => (
+                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>
+                                  {formatHours(hoursByMonth.get(month) || 0)}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                        <tr>
+                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
+                          {consultationTotals.map((total, index) => (
+                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>
+                              {formatHours(total)}
+                            </th>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', marginTop: '0.75rem' }}>
+                    Los meses sin planificación guardada aparecen con 0,00 horas.
+                  </p>
+                </>
               )}
             </section>
           )}

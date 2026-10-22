@@ -21,7 +21,8 @@ const normalize = (value) => String(value ?? '')
   .trim()
   .replace(/\s+/g, ' ');
 
-const formatHours = (hours) => hours.toLocaleString('es-ES', {
+const formatHours = (hours) => Number(hours).toLocaleString('es-ES', {
+  useGrouping: true,
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -700,8 +701,10 @@ const MedicionesPage = () => {
                           <th style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
                           {consultationMonths.map((month) => (
                             <th key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize' }}>
-                              {formatMonth(month)}
-                            </th>
+                                <span style={{ display: 'block', fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                  {formatMonth(month)}
+                                </span>
+                              </th>
                           ))}
                         </tr>
                       </thead>
@@ -712,7 +715,7 @@ const MedicionesPage = () => {
                             <tr key={profile.key}>
                               <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.name}</td>
                               {consultationMonths.map((month) => (
-                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'right' }}>
+                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                                   {formatHours(profileMonths.get(month) || 0)}
                                 </td>
                               ))}
@@ -722,7 +725,7 @@ const MedicionesPage = () => {
                         <tr>
                           <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
                           {consultationSummary.totals.map((total, index) => (
-                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'right' }}>
+                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                               {formatHours(total)}
                             </th>
                           ))}

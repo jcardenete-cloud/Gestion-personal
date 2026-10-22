@@ -173,7 +173,7 @@ const parseWorkbook = (workbook, projectAssignment, employees, assignedEmployees
   };
 };
 
-const buildMeasurementResult = (parsedData, manualSelections) => {
+const buildMeasurementResult = (parsedData, manualSelections, manualTariffs) => {
   if (!parsedData) return null;
 
   const aggregates = new Map();
@@ -200,7 +200,10 @@ const buildMeasurementResult = (parsedData, manualSelections) => {
     };
     aggregate.horas += record.hours;
     aggregate.empleados += 1;
-    const tariff = assignment?.TARIFA == null || assignment.TARIFA === ''
+    const selectedTariff = manualTariffs[String(employee.REF_PER)];
+    const tariff = selectedTariff !== undefined && selectedTariff !== ''
+      ? Number(selectedTariff)
+      : assignment?.TARIFA == null || assignment.TARIFA === ''
       ? null
       : Number(assignment.TARIFA);
     if (tariff === null || !Number.isFinite(tariff)) {
@@ -244,6 +247,7 @@ const MedicionesPage = () => {
   const [fileName, setFileName] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
+  const [manualTariffs, setManualTariffs] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -272,12 +276,48 @@ const MedicionesPage = () => {
   }, []);
 
   const unresolvedRecords = useMemo(
-    () => parsedData?.records.filter((record) => !record.employee) || [],
-    [parsedData]
-  );
-  const result = useMemo(
-    () => buildMeasurementResult(parsedData, manualSelections),
+    () => parsedData?.records.filter(
+      (record) => !record.employee && !manualSelections[record.id]
+    ) || [],
     [parsedData, manualSelections]
+  );
+  const tariffEmployees = useMemo(() => {
+    if (!parsedData) return [];
+    const employeesNeedingTariff = new Map();
+    parsedData.records.forEach((record) => {
+      const employee = record.employee || parsedData.assignedEmployees.find(
+        (candidate) => String(candidate.REF_PER) === manualSelections[record.id]
+      );
+      if (!employee) return;
+      const refPer = String(employee.REF_PER);
+      const assignment = parsedData.assignedEmployees.find(
+        (candidate) => String(candidate.REF_PER) === refPer
+      );
+      const existingTariff = Number(assignment?.TARIFA);
+      const hasValidTariff = assignment?.TARIFA !== null &&
+        assignment?.TARIFA !== undefined &&
+        assignment.TARIFA !== '' &&
+        Number.isFinite(existingTariff);
+      if (!hasValidTariff && !employeesNeedingTariff.has(refPer)) {
+        employeesNeedingTariff.set(refPer, employee);
+      }
+    });
+    return [...employeesNeedingTariff.values()].sort((a, b) =>
+      `${a.APELLIDO1 || ''} ${a.APELLIDO2 || ''} ${a.NOMBRE || ''}`.localeCompare(
+        `${b.APELLIDO1 || ''} ${b.APELLIDO2 || ''} ${b.NOMBRE || ''}`,
+        'es'
+      )
+    );
+  }, [parsedData, manualSelections]);
+  const result = useMemo(
+    () => buildMeasurementResult(parsedData, manualSelections, manualTariffs),
+    [parsedData, manualSelections, manualTariffs]
+  );
+  const pendingTariffEmployees = useMemo(
+    () => tariffEmployees.filter(
+      (employee) => !manualTariffs[String(employee.REF_PER)]
+    ),
+    [tariffEmployees, manualTariffs]
   );
   const sortedAssignments = useMemo(
     () => [...assignments].sort((a, b) =>
@@ -301,6 +341,8 @@ const MedicionesPage = () => {
   );
   const consultationSummary = useMemo(() => {
     const hoursByProfileMonth = new Map();
+    const amountsByProfileMonth = new Map();
+    const incompleteAmounts = new Set();
     const profileNames = new Map();
     const availableMonths = [];
 
@@ -319,6 +361,20 @@ const MedicionesPage = () => {
       const profileMonths = hoursByProfileMonth.get(profileKey) || new Map();
       profileMonths.set(monthKey, (profileMonths.get(monthKey) || 0) + hours);
       hoursByProfileMonth.set(profileKey, profileMonths);
+
+      const amountKey = `${profileKey}|${monthKey}`;
+      if (row.IMPORTE == null || row.IMPORTE === '') {
+        incompleteAmounts.add(amountKey);
+      } else {
+        const amount = Number(row.IMPORTE);
+        if (Number.isFinite(amount)) {
+          const profileAmounts = amountsByProfileMonth.get(profileKey) || new Map();
+          profileAmounts.set(monthKey, (profileAmounts.get(monthKey) || 0) + amount);
+          amountsByProfileMonth.set(profileKey, profileAmounts);
+        } else {
+          incompleteAmounts.add(amountKey);
+        }
+      }
     });
 
     const minMonth = availableMonths.length ? [...availableMonths].sort()[0] : null;
@@ -330,11 +386,24 @@ const MedicionesPage = () => {
       (total, profile) => total + (hoursByProfileMonth.get(profile.key)?.get(month) || 0),
       0
     ));
+    const amountTotals = consultationMonths.map((month) => {
+      const monthHasIncompleteAmount = profiles.some((profile) =>
+        incompleteAmounts.has(`${profile.key}|${month}`)
+      );
+      if (monthHasIncompleteAmount) return null;
+      return profiles.reduce(
+        (total, profile) => total + (amountsByProfileMonth.get(profile.key)?.get(month) || 0),
+        0
+      );
+    });
 
     return {
       profiles,
       hoursByProfileMonth,
       totals,
+      amountsByProfileMonth,
+      incompleteAmounts,
+      amountTotals,
       canGoBack: Boolean(minMonth && minMonth < consultationMonths[0]),
       canGoForward: Boolean(
         (maxMonth && maxMonth > consultationMonths[2]) ||
@@ -373,6 +442,7 @@ const MedicionesPage = () => {
     const file = event.target.files?.[0];
     setParsedData(null);
     setManualSelections({});
+    setManualTariffs({});
     setErrorMessage('');
     setSuccessMessage('');
     setFileName(file?.name || '');
@@ -401,13 +471,28 @@ const MedicionesPage = () => {
       if (!projectAssignment) {
         throw new Error(`El encargo ${projectCode} indicado en la hoja no existe en la base de datos.`);
       }
-      const assignmentResponse = await api.getAssignments(projectAssignment.CODIGOPR);
-      setParsedData(parseWorkbook(
+      const [assignmentResponse, budgetResponse] = await Promise.all([
+        api.getAssignments(projectAssignment.CODIGOPR),
+        api.getPresupuestoEncargo(projectAssignment.CODIGOPR),
+      ]);
+      const tariffOptions = Array.isArray(budgetResponse.data[0]?.PARTIDAS)
+        ? budgetResponse.data[0].PARTIDAS.filter((line) =>
+          line.tipo === 'partida' &&
+          normalize(line.unidad) === 'h' &&
+          line.precio_unidad !== null &&
+          line.precio_unidad !== undefined &&
+          Number.isFinite(Number(line.precio_unidad))
+        )
+        : [];
+      setParsedData({
+        ...parseWorkbook(
         workbook,
         projectAssignment,
         employees,
         assignmentResponse.data
-      ));
+        ),
+        tariffOptions,
+      });
     } catch (error) {
       setErrorMessage(`No se pudo procesar el fichero: ${error.message}`);
       setFileName('');
@@ -418,17 +503,35 @@ const MedicionesPage = () => {
   };
 
   const handleSave = async () => {
-    if (!result || result.error || !parsedData || isReadOnly) return;
+    if (!result || result.error || !parsedData || isReadOnly ||
+        unresolvedRecords.length > 0 || pendingTariffEmployees.length > 0) return;
     setSaving(true);
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      const records = result.aggregates.map(({ perfil, horas }) => ({
+      const usedEmployeeRefs = new Set(parsedData.records.map((record) => {
+        const employee = record.employee || parsedData.assignedEmployees.find(
+          (candidate) => String(candidate.REF_PER) === manualSelections[record.id]
+        );
+        return employee ? String(employee.REF_PER) : null;
+      }).filter(Boolean));
+      const tariffUpdates = Object.entries(manualTariffs)
+        .filter(([refPer]) => usedEmployeeRefs.has(refPer))
+        .filter(([, tariff]) => tariff !== '')
+        .map(([refPer, tariff]) => api.updateAssignment({
+          REF_PER: refPer,
+          CODIGOPR: parsedData.codigopr,
+          TARIFA: Number(tariff),
+        }));
+      await Promise.all(tariffUpdates);
+
+      const records = result.aggregates.map(({ perfil, horas, importe }) => ({
         codigopr: parsedData.codigopr,
         anio: result.anio,
         mes: result.mes,
         perfil,
         horas,
+        importe,
       }));
       await api.saveMediciones(records);
       setSuccessMessage(
@@ -499,7 +602,7 @@ const MedicionesPage = () => {
           <div role="status" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#9a6700' }}>
             <AlertCircle size={18} style={{ flexShrink: 0 }} />
             <span>
-              Hay {result.aggregates.reduce((count, item) => count + item.tarifasIncompletas, 0)} empleado(s) sin tarifa asignada en este encargo. El importe de su categoría se muestra como —.
+              Hay               {result.aggregates.reduce((count, item) => count + item.tarifasIncompletas, 0)} empleado(s) sin tarifa asignada. Asigna una tarifa del presupuesto para habilitar la carga.
             </span>
           </div>
         )}
@@ -528,9 +631,18 @@ const MedicionesPage = () => {
           </p>
         )}
         {!isReadOnly && result && !result.error && (
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginTop: '1rem' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={saving || unresolvedRecords.length > 0 || pendingTariffEmployees.length > 0}
+            style={{ marginTop: '1rem' }}
+          >
             {saving ? <Upload size={17} /> : <Save size={17} />}
-            {saving ? 'Guardando…' : 'Guardar mediciones'}
+            {saving ? 'Guardando…' : pendingTariffEmployees.length > 0
+              ? 'Asigna las tarifas pendientes'
+              : unresolvedRecords.length > 0
+                ? 'Asocia los empleados pendientes'
+                : 'Guardar mediciones'}
           </button>
         )}
         {isReadOnly && (
@@ -589,6 +701,76 @@ const MedicionesPage = () => {
               </label>
             ))}
           </div>
+        </section>
+      )}
+
+      {parsedData && tariffEmployees.length > 0 && (
+        <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.4rem' }}>
+            Tarifas de empleados ({tariffEmployees.length})
+          </h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Asigna una tarifa por hora disponible en el presupuesto antes de guardar las mediciones. La tarifa se guardará en la asignación del empleado a este encargo.
+          </p>
+          {parsedData.tariffOptions.length === 0 ? (
+            <p role="alert" style={{ color: '#b42318' }}>
+              El presupuesto de este encargo no contiene tarifas por hora disponibles. Carga o actualiza el presupuesto para poder asignar tarifas.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.85rem' }}>
+              {tariffEmployees.map((employee) => (
+                <label
+                  key={employee.REF_PER}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(180px, 1fr) minmax(260px, 2fr)',
+                    gap: '0.8rem',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span>
+                    <strong>{[employee.NOMBRE, employee.APELLIDO1, employee.APELLIDO2].filter(Boolean).join(' ')}</strong>
+                    <span style={{ display: 'block', color: 'var(--text-muted)' }}>
+                      {employee.PERFIL || 'Sin perfil'}
+                    </span>
+                  </span>
+                  <select
+                    value={manualTariffs[String(employee.REF_PER)] || ''}
+                    onChange={(event) => {
+                      const tariff = event.target.value;
+                      setManualTariffs((current) => {
+                        const updated = { ...current };
+                        if (tariff) updated[String(employee.REF_PER)] = tariff;
+                        else delete updated[String(employee.REF_PER)];
+                        return updated;
+                      });
+                      setSuccessMessage('');
+                    }}
+                    disabled={processing || saving}
+                    style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+                  >
+                    <option value="">
+                      {manualTariffs[String(employee.REF_PER)]
+                        ? 'Selecciona otra tarifa por hora'
+                        : 'Selecciona una tarifa por hora'}
+                    </option>
+                    {parsedData.tariffOptions.map((tariff, index) => (
+                      <option key={`${tariff.codigo || tariff.resumen}-${index}`} value={String(tariff.precio_unidad)}>
+                        {[tariff.codigo, tariff.resumen].filter(Boolean).join(' — ')}
+                        {' · '}
+                        {formatCurrency(Number(tariff.precio_unidad))}/h
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          )}
+          {pendingTariffEmployees.length > 0 && parsedData.tariffOptions.length > 0 && (
+            <p style={{ color: '#9a6700', marginTop: '1rem' }}>
+              Faltan {pendingTariffEmployees.length} tarifa(s) por asignar antes de cargar las mediciones.
+            </p>
+          )}
         </section>
       )}
 
@@ -742,29 +924,45 @@ const MedicionesPage = () => {
                     </p>
                   )}
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', textAlign: 'left', marginTop: 0 }}>
+                    <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', marginTop: 0 }}>
                       <thead>
                         <tr>
-                          <th style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
                           {consultationMonths.map((month) => (
-                            <th key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize' }}>
-                                <span style={{ display: 'block', fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center' }}>
-                                  {formatMonth(month)}
-                                </span>
-                              </th>
+                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize', textAlign: 'center' }}>
+                              <span style={{ display: 'block', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {formatMonth(month)}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                        <tr>
+                          {consultationMonths.map((month) => (
+                            <React.Fragment key={month}>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Horas</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Importe</th>
+                            </React.Fragment>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {consultationSummary.profiles.map((profile) => {
                           const profileMonths = consultationSummary.hoursByProfileMonth.get(profile.key);
+                          const profileAmounts = consultationSummary.amountsByProfileMonth.get(profile.key);
                           return (
                             <tr key={profile.key}>
                               <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.name}</td>
                               {consultationMonths.map((month) => (
-                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                                  {formatHours(profileMonths.get(month) || 0)}
-                                </td>
+                                <React.Fragment key={month}>
+                                  <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatHours(profileMonths.get(month) || 0)}
+                                  </td>
+                                  <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                    {consultationSummary.incompleteAmounts.has(`${profile.key}|${month}`)
+                                      ? '—'
+                                      : formatCurrency(profileAmounts?.get(month) || 0)}
+                                  </td>
+                                </React.Fragment>
                               ))}
                             </tr>
                           );
@@ -772,16 +970,21 @@ const MedicionesPage = () => {
                         <tr>
                           <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
                           {consultationSummary.totals.map((total, index) => (
-                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                              {formatHours(total)}
-                            </th>
+                            <React.Fragment key={consultationMonths[index]}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatHours(total)}
+                              </th>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatCurrency(consultationSummary.amountTotals[index])}
+                              </th>
+                            </React.Fragment>
                           ))}
                         </tr>
                       </tbody>
                     </table>
                   </div>
                   <p style={{ color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-                    Se muestran el mes actual y los dos anteriores. Los meses sin mediciones aparecen con 0,00 horas.
+                    Se muestran el mes actual y los dos anteriores. Los meses sin mediciones aparecen con 0,00 horas y 0,00 €. Los importes de mediciones cargadas antes de habilitar esta función aparecen como —; vuelve a cargar ese periodo para calcularlos.
                   </p>
                 </>
               )}

@@ -78,6 +78,7 @@ const AssignmentsPage = () => {
                 const lines = Array.isArray(data[0]?.PARTIDAS) ? data[0].PARTIDAS : [];
                 setBudgetTariffs(lines.filter((line) =>
                     line.tipo === 'partida' &&
+                    String(line.unidad || '').trim().toLowerCase() === 'h' &&
                     line.precio_unidad !== null &&
                     line.precio_unidad !== undefined &&
                     Number.isFinite(Number(line.precio_unidad))
@@ -325,7 +326,7 @@ const AssignmentsPage = () => {
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label>Tarifa del encargo</label>
+                                <label>Tarifa por hora del encargo</label>
                                 <select
                                     className="form-control"
                                     value={newAssignment.TARIFA}
@@ -339,7 +340,7 @@ const AssignmentsPage = () => {
                                         (line) => String(line.precio_unidad) === newAssignment.TARIFA
                                     ) && (
                                         <option value={newAssignment.TARIFA}>
-                                            Tarifa guardada: {Number(newAssignment.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/unidad
+                                            Tarifa guardada: {Number(newAssignment.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/h
                                         </option>
                                     )}
                                     {budgetTariffs.map((line, index) => (
@@ -436,7 +437,7 @@ const AssignmentsPage = () => {
                                         <td>{formatDate(a.ALTA)}</td>
                                         <td>{formatDate(a.BAJA)}</td>
                                         <td>{a.PORCENTAJE}%</td>
-                                        <td>{a.TARIFA == null ? '—' : `${Number(a.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/unidad`}</td>
+                                        <td>{a.TARIFA == null ? '—' : `${Number(a.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/h`}</td>
 
                                         <td>
                                             {canManage ? (

@@ -5,9 +5,16 @@ create table if not exists jcf.mediciones (
   mes smallint not null check (mes between 1 and 12),
   perfil text not null,
   horas numeric(12, 2) not null check (horas >= 0),
+  importe numeric(14, 2) check (importe >= 0),
   created_at timestamptz not null default now(),
   unique (codigopr, anio, mes, perfil)
 );
+
+alter table jcf.mediciones
+  add column if not exists importe numeric(14, 2) check (importe >= 0);
+
+comment on column jcf.mediciones.importe is
+  'Importe mensual por perfil calculado como suma de horas individuales por tarifa asignada; NULL para mediciones antiguas sin importe.';
 
 alter table jcf.mediciones enable row level security;
 

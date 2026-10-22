@@ -38,7 +38,7 @@ const COLUMN_DEFINITIONS = [
 
     // --- ASIGNACIÓN ---
     { id: 'PORCENTAJE', label: '% Asignación', group: 'asignacion', type: 'percent' },
-    { id: 'TARIFA', label: 'Tarifa €/unidad', group: 'asignacion', type: 'currency' },
+    { id: 'TARIFA', label: 'Tarifa €/h', group: 'asignacion', type: 'currency' },
     { id: 'ALTA_ASIGNACION', label: 'Alta Asig.', group: 'asignacion', type: 'date' },
     { id: 'BAJA_ASIGNACION', label: 'Baja Asig.', group: 'asignacion', type: 'date' },
     { id: 'RTP', label: 'RTP', group: 'asignacion', type: 'text' },

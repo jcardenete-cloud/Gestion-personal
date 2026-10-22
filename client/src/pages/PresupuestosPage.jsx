@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   FileSpreadsheet,
+  Search,
   Save,
   Upload,
 } from 'lucide-react';
@@ -177,6 +178,7 @@ const PresupuestosPage = () => {
   const { isReadOnly } = useAuth();
   const [assignments, setAssignments] = useState([]);
   const [selectedCode, setSelectedCode] = useState('');
+  const [assignmentSearch, setAssignmentSearch] = useState('');
   const [savedBudget, setSavedBudget] = useState(null);
   const [draft, setDraft] = useState(null);
   const [fileName, setFileName] = useState('');
@@ -227,9 +229,22 @@ const PresupuestosPage = () => {
   const selectedAssignment = assignments.find(
     (assignment) => String(assignment.CODIGOPR) === selectedCode
   );
+  const filteredAssignments = useMemo(() => {
+    const search = normalize(assignmentSearch);
+    return [...assignments]
+      .sort((a, b) => String(a.CODIGOPR ?? '').localeCompare(
+        String(b.CODIGOPR ?? ''),
+        'es',
+        { numeric: true, sensitivity: 'base' }
+      ))
+      .filter((assignment) => !search || normalize(
+        `${assignment.CODIGOPR ?? ''} ${assignment.NOMBRE ?? ''}`
+      ).includes(search));
+  }, [assignments, assignmentSearch]);
 
   const handleAssignmentChange = (event) => {
     setSelectedCode(event.target.value);
+    setAssignmentSearch('');
     setDraft(null);
     setFileName('');
     setErrorMessage('');
@@ -325,22 +340,41 @@ const PresupuestosPage = () => {
       )}
 
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
-        <label style={{ display: 'grid', gap: '0.45rem', maxWidth: '680px', fontWeight: 600 }}>
-          Encargo
-          <select
-            value={selectedCode}
-            onChange={handleAssignmentChange}
-            disabled={loading || budgetLoading || processing || saving}
-            style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
-          >
-            <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
-            {assignments.map((assignment) => (
-              <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
-                {assignment.CODIGOPR} — {assignment.NOMBRE}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '680px' }}>
+          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+            Buscar encargo por código o nombre
+            <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={17} style={{ position: 'absolute', left: '0.7rem', color: 'var(--text-muted)' }} />
+              <input
+                type="search"
+                value={assignmentSearch}
+                onChange={(event) => setAssignmentSearch(event.target.value)}
+                placeholder="Escribe el código o el nombre del encargo"
+                disabled={loading || budgetLoading || processing || saving}
+                style={{ width: '100%', padding: '0.65rem 0.65rem 0.65rem 2.2rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+              />
+            </span>
+          </label>
+          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+            Encargo
+            <select
+              value={selectedCode}
+              onChange={handleAssignmentChange}
+              disabled={loading || budgetLoading || processing || saving}
+              style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+            >
+              <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
+              {filteredAssignments.map((assignment) => (
+                <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
+                  {assignment.CODIGOPR} — {assignment.NOMBRE}
+                </option>
+              ))}
+              {!loading && filteredAssignments.length === 0 && (
+                <option value="" disabled>No hay encargos que coincidan con la búsqueda</option>
+              )}
+            </select>
+          </label>
+        </div>
 
         {selectedAssignment && !isReadOnly && (
           <div style={{ marginTop: '1.25rem' }}>

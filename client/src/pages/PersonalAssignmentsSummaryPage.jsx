@@ -38,6 +38,7 @@ const COLUMN_DEFINITIONS = [
 
     // --- ASIGNACIÓN ---
     { id: 'PORCENTAJE', label: '% Asignación', group: 'asignacion', type: 'percent' },
+    { id: 'TARIFA', label: 'Tarifa €/unidad', group: 'asignacion', type: 'currency' },
     { id: 'ALTA_ASIGNACION', label: 'Alta Asig.', group: 'asignacion', type: 'date' },
     { id: 'BAJA_ASIGNACION', label: 'Baja Asig.', group: 'asignacion', type: 'date' },
     { id: 'RTP', label: 'RTP', group: 'asignacion', type: 'text' },
@@ -63,6 +64,7 @@ const DEFAULT_VISIBLE_COLUMNS = [
     'NOMBRE_COMPLETO',
     'PERFIL',
     'PORCENTAJE',
+    'TARIFA',
     'ALTA_ASIGNACION',
     'BAJA_ASIGNACION',
     'ACTIVO'
@@ -226,6 +228,7 @@ const PersonalAssignmentsSummaryPage = () => {
 
                 // Assignment fields
                 PORCENTAJE: a.PORCENTAJE !== null && a.PORCENTAJE !== undefined ? parseFloat(a.PORCENTAJE) : 100,
+                TARIFA: a.TARIFA !== null && a.TARIFA !== undefined ? Number(a.TARIFA) : null,
                 ALTA_ASIGNACION: a.ALTA || null,
                 BAJA_ASIGNACION: a.BAJA || null,
                 RTP: a.RTP || 'N'

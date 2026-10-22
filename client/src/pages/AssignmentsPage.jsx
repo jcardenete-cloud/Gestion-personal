@@ -5,6 +5,8 @@ import api from '../api';
 import { normalizeString, formatDate } from '../utils';
 import { useAuth } from '../AuthContext';
 
+const MotionDiv = motion.div;
+
 const AssignmentsPage = () => {
     const { isReadOnly } = useAuth();
     const canManage = !isReadOnly;
@@ -12,7 +14,10 @@ const AssignmentsPage = () => {
     const [personal, setPersonal] = useState([]);
     const [selectedEncargo, setSelectedEncargo] = useState('');
     const [assignments, setAssignments] = useState([]);
-    const [newAssignment, setNewAssignment] = useState({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N' });
+    const [newAssignment, setNewAssignment] = useState({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N', TARIFA: '' });
+    const [budgetTariffs, setBudgetTariffs] = useState([]);
+    const [budgetLoading, setBudgetLoading] = useState(false);
+    const [budgetError, setBudgetError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [editingRefPer, setEditingRefPer] = useState(null);
     const [searchEncargo, setSearchEncargo] = useState('');
@@ -42,7 +47,7 @@ const AssignmentsPage = () => {
             return !assignments.some(a => a.REF_PER === p.REF_PER);
         })
         .filter(p =>
-            normalizeString(`${p.NOMBRE || ''} ${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''}`).includes(normalizeString(searchTerm))
+            editingRefPer || normalizeString(`${p.NOMBRE || ''} ${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''}`).includes(normalizeString(searchTerm))
         )
         .sort((a, b) => {
             const nameA = `${a.APELLIDO1} ${a.APELLIDO2}`.toLowerCase();
@@ -51,21 +56,52 @@ const AssignmentsPage = () => {
         });
 
     useEffect(() => {
-        if (selectedEncargo) {
-            loadAssignments();
-            setAssignments([]);
-            setEditingRefPer(null);
-            setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N' });
-        }
+        if (!selectedEncargo) return undefined;
+        let active = true;
+        api.getAssignments(selectedEncargo)
+            .then(({ data }) => {
+                if (active) setAssignments(data);
+            })
+            .catch((err) => {
+                if (active) console.error(err);
+            });
+        return () => { active = false; };
     }, [selectedEncargo]);
 
-    const loadAssignments = async () => {
-        try {
-            const res = await api.getAssignments(selectedEncargo);
-            setAssignments(res.data);
-        } catch (err) {
-            console.error(err);
-        }
+    useEffect(() => {
+        if (!selectedEncargo) return undefined;
+
+        let active = true;
+        api.getPresupuestoEncargo(selectedEncargo)
+            .then(({ data }) => {
+                if (!active) return;
+                const lines = Array.isArray(data[0]?.PARTIDAS) ? data[0].PARTIDAS : [];
+                setBudgetTariffs(lines.filter((line) =>
+                    line.tipo === 'partida' &&
+                    line.precio_unidad !== null &&
+                    line.precio_unidad !== undefined &&
+                    Number.isFinite(Number(line.precio_unidad))
+                ));
+            })
+            .catch((error) => {
+                if (active) setBudgetError(`No se pudieron cargar las tarifas del presupuesto: ${error.message}`);
+            })
+            .finally(() => {
+                if (active) setBudgetLoading(false);
+            });
+
+        return () => { active = false; };
+    }, [selectedEncargo]);
+
+    const handleEncargoChange = (event) => {
+        const codigopr = event.target.value;
+        setSelectedEncargo(codigopr);
+        setAssignments([]);
+        setEditingRefPer(null);
+        setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N', TARIFA: '' });
+        setBudgetTariffs([]);
+        setBudgetError('');
+        setBudgetLoading(Boolean(codigopr));
     };
 
     const sortedAssignments = React.useMemo(() => {
@@ -119,6 +155,15 @@ const AssignmentsPage = () => {
         return sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />;
     };
 
+    const loadAssignments = async () => {
+        try {
+            const res = await api.getAssignments(selectedEncargo);
+            setAssignments(res.data);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!canManage) {
@@ -135,13 +180,17 @@ const AssignmentsPage = () => {
             if (payload.BAJA === '') payload.BAJA = null;
             else if (typeof payload.BAJA === 'string') payload.BAJA = payload.BAJA.split('T')[0];
 
+            payload.TARIFA = payload.TARIFA === '' || payload.TARIFA == null
+                ? null
+                : Number(payload.TARIFA);
+
             if (editingRefPer) {
                 await api.updateAssignment(payload);
                 setEditingRefPer(null);
             } else {
                 await api.createAssignment(payload);
             }
-            setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N' });
+            setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N', TARIFA: '' });
             loadAssignments();
         } catch (err) {
             console.error(err);
@@ -160,13 +209,14 @@ const AssignmentsPage = () => {
             ALTA: assignment.ALTA ? assignment.ALTA.split('T')[0] : '',
             BAJA: assignment.BAJA ? assignment.BAJA.split('T')[0] : '',
             PORCENTAJE: assignment.PORCENTAJE,
-            RTP: assignment.RTP || 'N'
+            RTP: assignment.RTP || 'N',
+            TARIFA: assignment.TARIFA == null ? '' : String(assignment.TARIFA),
         });
     };
 
     const cancelEdit = () => {
         setEditingRefPer(null);
-        setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N' });
+        setNewAssignment({ REF_PER: '', ALTA: '', BAJA: '', PORCENTAJE: 100, RTP: 'N', TARIFA: '' });
     };
 
     const handleDelete = async (ref_per) => {
@@ -181,7 +231,7 @@ const AssignmentsPage = () => {
     };
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <MotionDiv initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>Asignaciones de Personal</h2>
 
             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '2rem', marginTop: '1.5rem' }}>
@@ -201,7 +251,7 @@ const AssignmentsPage = () => {
                 </div>
                 <div className="glass-card" style={{ flex: 1, padding: '1rem' }}>
                     <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Seleccionar Encargo:</p>
-                    <select className="form-control" value={selectedEncargo} onChange={e => setSelectedEncargo(e.target.value)} style={{ height: '42px', fontSize: '0.9rem' }}>
+                    <select className="form-control" value={selectedEncargo} onChange={handleEncargoChange} style={{ height: '42px', fontSize: '0.9rem' }}>
                         <option value="">-- Seleccione un encargo --</option>
                         {encargos
                             .filter(e => {
@@ -250,10 +300,7 @@ const AssignmentsPage = () => {
                                     disabled={!!editingRefPer || !canManage}
                                 >
                                     <option value="">-- Seleccione persona --</option>
-                                    {personal
-                                        .filter(p => editingRefPer ? p.REF_PER === editingRefPer : !assignments.some(a => a.REF_PER === p.REF_PER))
-                                        .filter(p => editingRefPer ? true : normalizeString(`${p.NOMBRE || ''} ${p.APELLIDO1 || ''} ${p.APELLIDO2 || ''}`).includes(normalizeString(searchTerm)))
-                                        .map(p => (
+                                    {filteredPersonal.map(p => (
                                             <option key={p.REF_PER} value={p.REF_PER}>{p.NOMBRE} {p.APELLIDO1} {p.APELLIDO2} ({p.PERFIL})</option>
                                         ))}
                                 </select>
@@ -276,6 +323,44 @@ const AssignmentsPage = () => {
                                     <option value="S">S</option>
                                     <option value="N">N</option>
                                 </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Tarifa del encargo</label>
+                                <select
+                                    className="form-control"
+                                    value={newAssignment.TARIFA}
+                                    onChange={e => setNewAssignment({ ...newAssignment, TARIFA: e.target.value })}
+                                    disabled={!canManage || budgetLoading}
+                                >
+                                    <option value="">
+                                        {budgetLoading ? 'Cargando tarifas…' : 'Sin tarifa (nulo)'}
+                                    </option>
+                                    {newAssignment.TARIFA !== '' && !budgetTariffs.some(
+                                        (line) => String(line.precio_unidad) === newAssignment.TARIFA
+                                    ) && (
+                                        <option value={newAssignment.TARIFA}>
+                                            Tarifa guardada: {Number(newAssignment.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/unidad
+                                        </option>
+                                    )}
+                                    {budgetTariffs.map((line, index) => (
+                                        <option key={`${line.codigo || line.resumen}-${index}`} value={String(line.precio_unidad)}>
+                                            {[line.codigo, line.resumen].filter(Boolean).join(' — ')}
+                                            {' · '}
+                                            {Number(line.precio_unidad).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {line.unidad ? ` €/${line.unidad}` : ' €'}
+                                        </option>
+                                    ))}
+                                </select>
+                                {budgetError && (
+                                    <small role="alert" style={{ display: 'block', marginTop: '0.35rem', color: '#b42318' }}>
+                                        {budgetError}
+                                    </small>
+                                )}
+                                {!budgetLoading && !budgetError && budgetTariffs.length === 0 && (
+                                    <small style={{ display: 'block', marginTop: '0.35rem', color: 'var(--text-muted)' }}>
+                                        Este encargo no tiene tarifas cargadas; la tarifa puede dejarse nula.
+                                    </small>
+                                )}
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -335,6 +420,11 @@ const AssignmentsPage = () => {
                                             % {getSortIcon('PORCENTAJE')}
                                         </div>
                                     </th>
+                                    <th onClick={() => requestSort('TARIFA')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                            Tarifa {getSortIcon('TARIFA')}
+                                        </div>
+                                    </th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
@@ -346,6 +436,7 @@ const AssignmentsPage = () => {
                                         <td>{formatDate(a.ALTA)}</td>
                                         <td>{formatDate(a.BAJA)}</td>
                                         <td>{a.PORCENTAJE}%</td>
+                                        <td>{a.TARIFA == null ? '—' : `${Number(a.TARIFA).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/unidad`}</td>
 
                                         <td>
                                             {canManage ? (
@@ -365,7 +456,7 @@ const AssignmentsPage = () => {
                                 ))}
                                 {sortedAssignments.length === 0 && (
                                     <tr>
-                                        <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay personal asignado</td>
+                                        <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay personal asignado</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -373,7 +464,7 @@ const AssignmentsPage = () => {
                     </div>
                 </div>
             )}
-        </motion.div>
+        </MotionDiv>
     );
 };
 

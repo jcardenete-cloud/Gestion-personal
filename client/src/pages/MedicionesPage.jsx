@@ -27,6 +27,14 @@ const formatHours = (hours) => Number(hours).toLocaleString('es-ES', {
   maximumFractionDigits: 2,
 });
 
+const formatCurrency = (amount) => amount == null
+  ? '—'
+  : Number(amount).toLocaleString('es-ES', {
+    useGrouping: true,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + ' €';
+
 const shiftMonth = (value, offset) => {
   const [year, month] = value.split('-').map(Number);
   const shifted = new Date(year, month - 1 + offset, 1);
@@ -179,10 +187,27 @@ const buildMeasurementResult = (parsedData, manualSelections) => {
     if (!profile) {
       return { error: `El empleado seleccionado para "${record.name}" no tiene perfil asignado en la base de datos.` };
     }
+    const assignment = parsedData.assignedEmployees.find(
+      (candidate) => String(candidate.REF_PER) === String(employee.REF_PER)
+    );
     const profileKey = normalize(profile);
-    const aggregate = aggregates.get(profileKey) || { perfil: profile, horas: 0, empleados: 0 };
+    const aggregate = aggregates.get(profileKey) || {
+      perfil: profile,
+      horas: 0,
+      empleados: 0,
+      importe: 0,
+      tarifasIncompletas: 0,
+    };
     aggregate.horas += record.hours;
     aggregate.empleados += 1;
+    const tariff = assignment?.TARIFA == null || assignment.TARIFA === ''
+      ? null
+      : Number(assignment.TARIFA);
+    if (tariff === null || !Number.isFinite(tariff)) {
+      aggregate.tarifasIncompletas += 1;
+    } else {
+      aggregate.importe += record.hours * tariff;
+    }
     aggregates.set(profileKey, aggregate);
   }
 
@@ -191,7 +216,13 @@ const buildMeasurementResult = (parsedData, manualSelections) => {
     mes: parsedData.mes,
     importedCount: parsedData.records.length,
     aggregates: [...aggregates.values()]
-      .map((item) => ({ ...item, horas: Math.round((item.horas + Number.EPSILON) * 100) / 100 }))
+      .map((item) => ({
+        ...item,
+        horas: Math.round((item.horas + Number.EPSILON) * 100) / 100,
+        importe: item.tarifasIncompletas > 0
+          ? null
+          : Math.round((item.importe + Number.EPSILON) * 100) / 100,
+      }))
       .sort((a, b) => a.perfil.localeCompare(b.perfil, 'es')),
   };
 };
@@ -463,6 +494,15 @@ const MedicionesPage = () => {
           <span>{result.error}</span>
         </div>
       )}
+      {activeTab === 'upload' && result && !result.error &&
+        result.aggregates.some((item) => item.tarifasIncompletas > 0) && (
+          <div role="status" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#9a6700' }}>
+            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+            <span>
+              Hay {result.aggregates.reduce((count, item) => count + item.tarifasIncompletas, 0)} empleado(s) sin tarifa asignada en este encargo. El importe de su categoría se muestra como —.
+            </span>
+          </div>
+        )}
 
       {activeTab === 'upload' && (
         <>
@@ -567,14 +607,18 @@ const MedicionesPage = () => {
               </p>
             </div>
             <p style={{ fontWeight: 600 }}>
-              Total: {formatHours(result.aggregates.reduce((sum, item) => sum + item.horas, 0))} h
+              Total horas: {formatHours(result.aggregates.reduce((sum, item) => sum + item.horas, 0))} h
+              <br />
+              Importe total: {formatCurrency(result.aggregates.some((item) => item.importe === null)
+                ? null
+                : result.aggregates.reduce((sum, item) => sum + item.importe, 0))}
             </p>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr>
-                  {['Perfil', 'Empleados', 'Horas H.MES'].map((heading) => (
+                  {['Perfil', 'Empleados', 'Horas H.MES', 'Importe'].map((heading) => (
                     <th key={heading} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>{heading}</th>
                   ))}
                 </tr>
@@ -586,6 +630,9 @@ const MedicionesPage = () => {
                     <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>{item.empleados}</td>
                     <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>
                       {formatHours(item.horas)}
+                    </td>
+                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-card)' }}>
+                      {formatCurrency(item.importe)}
                     </td>
                   </tr>
                 ))}

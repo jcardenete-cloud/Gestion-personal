@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Save, Upload } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  FileSpreadsheet,
+  Save,
+  Search,
+  Upload,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api';
 import { useAuth } from '../AuthContext';
@@ -16,6 +25,25 @@ const formatHours = (hours) => hours.toLocaleString('es-ES', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+const shiftMonth = (value, offset) => {
+  const [year, month] = value.split('-').map(Number);
+  const shifted = new Date(year, month - 1 + offset, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const getCurrentMonth = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const formatMonth = (value) => {
+  const [year, month] = value.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('es-ES', {
+    month: 'long',
+    year: 'numeric',
+  });
+};
 
 const parseInteger = (value, fieldName) => {
   const parsed = Number.parseInt(String(value ?? '').trim(), 10);
@@ -171,6 +199,16 @@ const MedicionesPage = () => {
   const { isReadOnly } = useAuth();
   const [assignments, setAssignments] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [activeTab, setActiveTab] = useState('upload');
+  const [consultationCode, setConsultationCode] = useState('');
+  const [consultationSearch, setConsultationSearch] = useState('');
+  const [consultationRows, setConsultationRows] = useState([]);
+  const [consultationAnchorMonth] = useState(getCurrentMonth);
+  const [consultationStartMonth, setConsultationStartMonth] = useState(
+    () => shiftMonth(getCurrentMonth(), -2)
+  );
+  const [consultationLoading, setConsultationLoading] = useState(false);
+  const [consultationError, setConsultationError] = useState('');
   const [fileName, setFileName] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
@@ -209,6 +247,95 @@ const MedicionesPage = () => {
     () => buildMeasurementResult(parsedData, manualSelections),
     [parsedData, manualSelections]
   );
+  const sortedAssignments = useMemo(
+    () => [...assignments].sort((a, b) =>
+      String(a.CODIGOPR ?? '').localeCompare(
+        String(b.CODIGOPR ?? ''),
+        'es',
+        { numeric: true, sensitivity: 'base' }
+      )
+    ),
+    [assignments]
+  );
+  const filteredAssignments = useMemo(() => {
+    const search = normalize(consultationSearch);
+    return sortedAssignments.filter((assignment) => !search || normalize(
+      `${assignment.CODIGOPR ?? ''} ${assignment.NOMBRE ?? ''}`
+    ).includes(search));
+  }, [sortedAssignments, consultationSearch]);
+  const consultationMonths = useMemo(
+    () => [0, 1, 2].map((offset) => shiftMonth(consultationStartMonth, offset)),
+    [consultationStartMonth]
+  );
+  const consultationSummary = useMemo(() => {
+    const hoursByProfileMonth = new Map();
+    const profileNames = new Map();
+    const availableMonths = [];
+
+    consultationRows.forEach((row) => {
+      const year = Number(row.ANIO);
+      const month = Number(row.MES);
+      const hours = Number(row.HORAS);
+      const profile = String(row.PERFIL ?? '').trim();
+      if (!Number.isInteger(year) || !Number.isInteger(month) ||
+          month < 1 || month > 12 || !Number.isFinite(hours) || !profile) return;
+
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+      const profileKey = normalize(profile);
+      availableMonths.push(monthKey);
+      profileNames.set(profileKey, profileNames.get(profileKey) || profile);
+      const profileMonths = hoursByProfileMonth.get(profileKey) || new Map();
+      profileMonths.set(monthKey, (profileMonths.get(monthKey) || 0) + hours);
+      hoursByProfileMonth.set(profileKey, profileMonths);
+    });
+
+    const minMonth = availableMonths.length ? [...availableMonths].sort()[0] : null;
+    const maxMonth = availableMonths.length ? [...availableMonths].sort().at(-1) : null;
+    const profiles = [...profileNames.entries()]
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const totals = consultationMonths.map((month) => profiles.reduce(
+      (total, profile) => total + (hoursByProfileMonth.get(profile.key)?.get(month) || 0),
+      0
+    ));
+
+    return {
+      profiles,
+      hoursByProfileMonth,
+      totals,
+      canGoBack: Boolean(minMonth && minMonth < consultationMonths[0]),
+      canGoForward: Boolean(
+        (maxMonth && maxMonth > consultationMonths[2]) ||
+        consultationMonths[0] < shiftMonth(consultationAnchorMonth, -2)
+      ),
+    };
+  }, [consultationAnchorMonth, consultationRows, consultationMonths]);
+
+  useEffect(() => {
+    if (activeTab !== 'consultation' || !consultationCode) {
+      setConsultationRows([]);
+      setConsultationLoading(false);
+      setConsultationError('');
+      return undefined;
+    }
+
+    let active = true;
+    setConsultationRows([]);
+    setConsultationLoading(true);
+    setConsultationError('');
+    api.getMedicionesEncargo(consultationCode)
+      .then(({ data }) => {
+        if (active) setConsultationRows(data);
+      })
+      .catch((error) => {
+        if (active) setConsultationError(`No se pudieron cargar las mediciones del encargo: ${error.message}`);
+      })
+      .finally(() => {
+        if (active) setConsultationLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [activeTab, consultationCode]);
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
@@ -287,29 +414,57 @@ const MedicionesPage = () => {
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>Mediciones por perfil</h2>
         <p style={{ color: 'var(--text-muted)' }}>
-          Carga el Excel de horas para identificar el encargo automáticamente y obtener el total mensual por perfil.
+          Carga mediciones desde Excel o consulta las horas guardadas por encargo y mes.
         </p>
       </div>
 
-      {errorMessage && (
+      <div role="tablist" aria-label="Secciones de mediciones" style={{ display: 'flex', gap: '0.4rem', borderBottom: '1px solid var(--border-card)', marginBottom: '1.25rem' }}>
+        {[
+          { id: 'upload', label: 'Cargar mediciones' },
+          { id: 'consultation', label: 'Consultar por encargo' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '0.75rem 1rem',
+              border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
+              background: 'transparent',
+              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
+              fontWeight: activeTab === tab.id ? 600 : 400,
+              cursor: 'pointer',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'upload' && errorMessage && (
         <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
           <AlertCircle size={18} style={{ flexShrink: 0 }} />
           <span>{errorMessage}</span>
         </div>
       )}
-      {successMessage && (
+      {activeTab === 'upload' && successMessage && (
         <div role="status" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '1rem', color: '#16794b' }}>
           <CheckCircle2 size={18} />
           <span>{successMessage}</span>
         </div>
       )}
-      {result?.error && (
+      {activeTab === 'upload' && result?.error && (
         <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
           <AlertCircle size={18} style={{ flexShrink: 0 }} />
           <span>{result.error}</span>
         </div>
       )}
 
+      {activeTab === 'upload' && (
+        <>
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr)', gap: '1rem' }}>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
@@ -437,6 +592,152 @@ const MedicionesPage = () => {
             </table>
           </div>
         </section>
+      )}
+        </>
+      )}
+
+      {activeTab === 'consultation' && (
+        <>
+          {errorMessage && (
+            <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+          <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 680px)', gap: '1rem' }}>
+              <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+                Buscar encargo por código o nombre
+                <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <Search size={17} style={{ position: 'absolute', left: '0.7rem', color: 'var(--text-muted)' }} />
+                  <input
+                    type="search"
+                    value={consultationSearch}
+                    onChange={(event) => setConsultationSearch(event.target.value)}
+                    placeholder="Escribe el código o el nombre del encargo"
+                    disabled={loading || consultationLoading}
+                    style={{ width: '100%', padding: '0.65rem 0.65rem 0.65rem 2.2rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+                  />
+                </span>
+              </label>
+              <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+                Encargo
+                <select
+                  value={consultationCode}
+                  onChange={(event) => setConsultationCode(event.target.value)}
+                  disabled={loading || consultationLoading}
+                  style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+                >
+                  <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
+                  {filteredAssignments.map((assignment) => (
+                    <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
+                      {assignment.CODIGOPR} — {assignment.NOMBRE}
+                    </option>
+                  ))}
+                  {!loading && filteredAssignments.length === 0 && (
+                    <option value="" disabled>No hay encargos que coincidan con la búsqueda</option>
+                  )}
+                </select>
+              </label>
+            </div>
+          </section>
+
+          {consultationError && (
+            <div role="alert" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem', color: '#b42318' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{consultationError}</span>
+            </div>
+          )}
+
+          {consultationCode && (
+            <section className="glass-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.3rem' }}>
+                    Encargo {consultationCode} — {assignments.find(
+                      (assignment) => String(assignment.CODIGOPR) === consultationCode
+                    )?.NOMBRE}
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)' }}>
+                    Mediciones por perfil · {formatMonth(consultationMonths[0])} – {formatMonth(consultationMonths[2])}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setConsultationStartMonth((month) => shiftMonth(month, -3))}
+                    disabled={consultationLoading || !consultationSummary.canGoBack}
+                    aria-label="Ver mediciones de meses anteriores"
+                  >
+                    <ChevronLeft size={18} /> Meses anteriores
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setConsultationStartMonth((month) => shiftMonth(month, 3))}
+                    disabled={consultationLoading || !consultationSummary.canGoForward}
+                    aria-label="Ver mediciones de meses siguientes"
+                  >
+                    Meses siguientes <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {consultationLoading ? (
+                <p role="status" style={{ color: 'var(--text-muted)' }}>Cargando mediciones guardadas…</p>
+              ) : (
+                <>
+                  {consultationSummary.profiles.length === 0 && (
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                      No hay mediciones guardadas para este encargo; los totales se muestran como cero.
+                    </p>
+                  )}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', textAlign: 'left', marginTop: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          {consultationMonths.map((month) => (
+                            <th key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize' }}>
+                              {formatMonth(month)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {consultationSummary.profiles.map((profile) => {
+                          const profileMonths = consultationSummary.hoursByProfileMonth.get(profile.key);
+                          return (
+                            <tr key={profile.key}>
+                              <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.name}</td>
+                              {consultationMonths.map((month) => (
+                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'right' }}>
+                                  {formatHours(profileMonths.get(month) || 0)}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                        <tr>
+                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
+                          {consultationSummary.totals.map((total, index) => (
+                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'right' }}>
+                              {formatHours(total)}
+                            </th>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', marginTop: '0.75rem' }}>
+                    Se muestran el mes actual y los dos anteriores. Los meses sin mediciones aparecen con 0,00 horas.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+        </>
       )}
     </div>
   );

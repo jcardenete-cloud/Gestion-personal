@@ -140,6 +140,9 @@ const saveMediciones = async (rows) => {
   return { data: normalizeKeys(data || []) };
 };
 
+const getMedicionesEncargo = (codigopr) =>
+  selectAll('MEDICIONES', { CODIGOPR: codigopr });
+
 const savePlanificacion = async (rows) => {
   const payload = rows.map(lower);
   const { data, error } = await table('PLANIFICACION')
@@ -511,6 +514,7 @@ const api = {
   updateEncargo,
   deleteEncargo,
   saveMediciones,
+  getMedicionesEncargo,
   savePlanificacion,
   getPlanificacion,
   getPresupuestoEncargo,

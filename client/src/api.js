@@ -152,6 +152,17 @@ const savePlanificacion = async (rows) => {
 const getPlanificacion = (codigopr) =>
   selectAll('PLANIFICACION', { CODIGOPR: codigopr });
 
+const getPresupuestoEncargo = (codigopr) =>
+  selectAll('PRESUPUESTOS_ENCARGO', { CODIGOPR: codigopr });
+
+const savePresupuestoEncargo = async (budget) => {
+  const { data, error } = await table('PRESUPUESTOS_ENCARGO')
+    .upsert(lower(budget), { onConflict: 'codigopr' })
+    .select();
+  throwIfError({ error });
+  return { data: normalizeKeys(data || []) };
+};
+
 const getPlanningConfig = async () => {
   const { data, error } = await table('CONFIG')
     .select('hours_per_week,hours_per_week_summer')
@@ -502,6 +513,8 @@ const api = {
   saveMediciones,
   savePlanificacion,
   getPlanificacion,
+  getPresupuestoEncargo,
+  savePresupuestoEncargo,
   getPlanningConfig,
 
   // Personal

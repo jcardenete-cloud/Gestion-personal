@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban,
     Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight,
     ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck,
-    ChartNoAxesColumn, CalendarRange
+    ChartNoAxesColumn, CalendarRange, FileSpreadsheet
 } from 'lucide-react';
 import EncargosPage from './pages/EncargosPage';
 import PersonalPage from './pages/PersonalPage';
@@ -19,6 +19,7 @@ import LoginPage from './pages/LoginPage';
 import PersonalAssignmentsSummaryPage from './pages/PersonalAssignmentsSummaryPage';
 import MedicionesPage from './pages/MedicionesPage';
 import PlanificacionPage from './pages/PlanificacionPage';
+import PresupuestosPage from './pages/PresupuestosPage';
 import { useAuth } from './AuthContext';
 
 function App() {
@@ -153,6 +154,9 @@ function App() {
         <NavLink to="/planificacion" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <CalendarRange size={18} /> {isExpanded && <span>Planificación</span>}
         </NavLink>
+        <NavLink to="/presupuestos" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <FileSpreadsheet size={18} /> {isExpanded && <span>Presupuestos</span>}
+        </NavLink>
 
         {/* Usuarios page: only visible to admins */}
         {isAdmin && (
@@ -233,6 +237,7 @@ function App() {
           <Route path="/vacaciones" element={<VacacionesPage />} />
           <Route path="/mediciones" element={<MedicionesPage />} />
           <Route path="/planificacion" element={<PlanificacionPage />} />
+          <Route path="/presupuestos" element={<PresupuestosPage />} />
           {isAdmin && <Route path="/usuarios" element={<UsuariosPage />} />}
         </Routes>
       </main>

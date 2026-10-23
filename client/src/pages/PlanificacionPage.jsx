@@ -605,7 +605,7 @@ const PlanificacionPage = () => {
         </div>
       )}
 
-      {result.employees.some((employee) => employee.importe === null) && (
+      {result && !result.error && result.employees.some((employee) => employee.importe === null) && (
         <div role="status" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1.25rem', color: '#9a6700' }}>
           <AlertCircle size={18} style={{ flexShrink: 0 }} />
           <span>

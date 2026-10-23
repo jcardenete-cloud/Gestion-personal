@@ -38,6 +38,34 @@ const formatCurrency = (amount) => amount == null
 const isActiveEmployee = (employee) =>
   String(employee?.ACTIVO ?? '').trim().toUpperCase() === 'S';
 
+const sameTariff = (first, second) => {
+  const firstValue = Number(first);
+  const secondValue = Number(second);
+  return Number.isFinite(firstValue) &&
+    Number.isFinite(secondValue) &&
+    Math.abs(firstValue - secondValue) < 0.000001;
+};
+
+const getBudgetProfile = (tariff) =>
+  String(tariff?.resumen || tariff?.codigo || '').trim();
+
+const getBudgetTariffIssue = (tariffOptions, tariffValue) => {
+  if (tariffValue == null || tariffValue === '' || !Number.isFinite(Number(tariffValue))) {
+    return 'missing';
+  }
+  const matches = tariffOptions.filter((option) =>
+    sameTariff(option.precio_unidad, tariffValue)
+  );
+  if (matches.length === 0) return 'unmatched';
+  const profiles = new Map(matches
+    .map(getBudgetProfile)
+    .filter(Boolean)
+    .map((name) => [normalize(name), name]));
+  if (profiles.size > 1) return 'ambiguous';
+  if (profiles.size === 0) return 'unidentified';
+  return null;
+};
+
 const toDateString = (date) => date.toISOString().slice(0, 10);
 
 const parseMonth = (value) => {
@@ -86,14 +114,15 @@ const getVacationDates = (vacations, refPer, firstDay, lastDay) => {
   return days;
 };
 
-const getEmployeeSchedule = (assignmentRows, employees, manualSelections) => {
+const getEmployeeSchedule = (assignmentRows, employees, manualSelections, hasBudget) => {
   const peopleByRef = new Map(employees.map((person) => [String(person.REF_PER), person]));
   return assignmentRows.map((assignment) => {
     const linkedEmployee = peopleByRef.get(String(assignment.REF_PER));
     const selectedEmployee = peopleByRef.get(manualSelections[String(assignment.REF_PER)]);
-    const employee = isActiveEmployee(linkedEmployee) && linkedEmployee?.PERFIL && linkedEmployee?.NOMBRE
+    const hasRequiredIdentity = (person) => person?.NOMBRE && (hasBudget || person?.PERFIL);
+    const employee = isActiveEmployee(linkedEmployee) && hasRequiredIdentity(linkedEmployee)
       ? linkedEmployee
-      : isActiveEmployee(selectedEmployee) ? selectedEmployee : null;
+      : isActiveEmployee(selectedEmployee) && hasRequiredIdentity(selectedEmployee) ? selectedEmployee : null;
     return { assignment, employee: employee || null };
   });
 };
@@ -102,6 +131,9 @@ const getPlanningSummary = ({
   assignmentRows,
   employees,
   manualSelections,
+  manualTariffs,
+  tariffOptions,
+  hasBudget,
   vacations,
   holidays,
   config,
@@ -109,7 +141,7 @@ const getPlanningSummary = ({
   projectEndDate,
 }) => {
   if (!assignmentRows) return null;
-  const scheduledEmployees = getEmployeeSchedule(assignmentRows, employees, manualSelections);
+  const scheduledEmployees = getEmployeeSchedule(assignmentRows, employees, manualSelections, hasBudget);
   if (scheduledEmployees.some(({ employee }) => !employee)) return null;
 
   const refs = scheduledEmployees.map(({ employee }) => String(employee.REF_PER));
@@ -161,6 +193,34 @@ const getPlanningSummary = ({
     const assignmentTariff = assignment.TARIFA == null || assignment.TARIFA === ''
       ? null
       : Number(assignment.TARIFA);
+    const selectedTariffIndex = manualTariffs[String(employee.REF_PER)];
+    const selectedTariffOption = selectedTariffIndex !== undefined &&
+      selectedTariffIndex !== ''
+      ? tariffOptions[Number(selectedTariffIndex)]
+      : null;
+    const tariff = selectedTariffOption
+      ? Number(selectedTariffOption.precio_unidad)
+      : assignmentTariff;
+    let profile = String(employee.PERFIL ?? '').trim();
+    if (hasBudget) {
+      if (selectedTariffOption) {
+        profile = getBudgetProfile(selectedTariffOption);
+      } else {
+        const issue = getBudgetTariffIssue(tariffOptions, tariff);
+        if (issue) {
+          return { error: `No se pudo identificar la tarifa del empleado "${employee.NOMBRE}". Selecciona una partida del presupuesto para este empleado.` };
+        }
+        profile = tariffOptions
+          .filter((option) => sameTariff(option.precio_unidad, tariff))
+          .map(getBudgetProfile)
+          .find(Boolean) || '';
+      }
+      if (!profile) {
+        return { error: `La partida seleccionada para "${employee.NOMBRE}" no tiene un perfil identificado en el presupuesto.` };
+      }
+    } else if (!profile) {
+      return { error: `El empleado "${employee.NOMBRE}" no tiene perfil asignado en la base de datos.` };
+    }
     let workingDays = 0;
     let vacationDays = 0;
     let hours = 0;
@@ -201,13 +261,13 @@ const getPlanningSummary = ({
     return {
       refPer: employee.REF_PER,
       name: [employee.NOMBRE, employee.APELLIDO1, employee.APELLIDO2].filter(Boolean).join(' '),
-      perfil: String(employee.PERFIL).trim(),
+      perfil: profile,
       porcentaje: assignmentPercentage,
       workingDays,
       vacationDays,
       horas: Math.round((hours + Number.EPSILON) * 100) / 100,
-      tarifa: assignmentTariff !== null && Number.isFinite(assignmentTariff)
-        ? assignmentTariff
+      tarifa: tariff !== null && Number.isFinite(tariff)
+        ? tariff
         : null,
     };
   });
@@ -276,6 +336,9 @@ const PlanificacionPage = () => {
   const [monthValue, setMonthValue] = useState(currentMonth);
   const [assignmentRows, setAssignmentRows] = useState(null);
   const [manualSelections, setManualSelections] = useState({});
+  const [manualTariffs, setManualTariffs] = useState({});
+  const [tariffOptions, setTariffOptions] = useState([]);
+  const [hasBudget, setHasBudget] = useState(false);
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -427,10 +490,47 @@ const PlanificacionPage = () => {
     if (!assignmentRows) return [];
     const employeeMap = new Map(employees.map((person) => [String(person.REF_PER), person]));
     return assignmentRows.filter((assignment) => {
+      if (manualSelections[String(assignment.REF_PER)]) return false;
       const employee = employeeMap.get(String(assignment.REF_PER));
-      return !employee?.PERFIL || !employee?.NOMBRE;
+      return !employee?.NOMBRE || (!hasBudget && !employee?.PERFIL);
     });
-  }, [assignmentRows, employees]);
+  }, [assignmentRows, employees, hasBudget, manualSelections]);
+  const tariffEmployees = useMemo(() => {
+    if (!assignmentRows || !hasBudget) return [];
+    const employeeMap = new Map(employees.map((person) => [String(person.REF_PER), person]));
+    const employeesNeedingTariff = new Map();
+    assignmentRows.forEach((assignment) => {
+      const employee = employeeMap.get(manualSelections[String(assignment.REF_PER)] || String(assignment.REF_PER));
+      if (!isActiveEmployee(employee) || !employee?.NOMBRE) return;
+      const refPer = String(employee.REF_PER);
+      const selectedTariffIndex = manualTariffs[refPer];
+      const selectedTariffOption = selectedTariffIndex !== undefined && selectedTariffIndex !== ''
+        ? tariffOptions[Number(selectedTariffIndex)]
+        : null;
+      const issue = selectedTariffOption
+        ? getBudgetProfile(selectedTariffOption) ? null : 'unidentified'
+        : getBudgetTariffIssue(tariffOptions, assignment.TARIFA);
+      if (issue) {
+        employeesNeedingTariff.set(refPer, {
+          ...employee,
+          tariffIssue: issue,
+        });
+      }
+    });
+    return [...employeesNeedingTariff.values()].sort((a, b) =>
+      `${a.APELLIDO1 || ''} ${a.APELLIDO2 || ''} ${a.NOMBRE || ''}`.localeCompare(
+        `${b.APELLIDO1 || ''} ${b.APELLIDO2 || ''} ${b.NOMBRE || ''}`,
+        'es'
+      )
+    );
+  }, [assignmentRows, employees, hasBudget, manualSelections, manualTariffs, tariffOptions]);
+  const pendingTariffEmployees = useMemo(
+    () => tariffEmployees.filter((employee) =>
+      manualTariffs[String(employee.REF_PER)] === undefined ||
+      manualTariffs[String(employee.REF_PER)] === ''
+    ),
+    [tariffEmployees, manualTariffs]
+  );
   const result = useMemo(
     () => {
       try {
@@ -438,6 +538,9 @@ const PlanificacionPage = () => {
           assignmentRows,
           employees,
           manualSelections,
+          manualTariffs,
+          tariffOptions,
+          hasBudget,
           vacations,
           holidays,
           config,
@@ -448,7 +551,7 @@ const PlanificacionPage = () => {
         return { error: error.message };
       }
     },
-    [assignmentRows, employees, manualSelections, vacations, holidays, config, monthValue, selectedAssignment]
+    [assignmentRows, employees, manualSelections, manualTariffs, tariffOptions, hasBudget, vacations, holidays, config, monthValue, selectedAssignment]
   );
 
   const handleCalculate = async () => {
@@ -467,11 +570,28 @@ const PlanificacionPage = () => {
     setSuccessMessage('');
     setAssignmentRows(null);
     setManualSelections({});
+    setManualTariffs({});
+    setTariffOptions([]);
+    setHasBudget(false);
     try {
-      const response = await api.getAssignments(selectedAssignment.CODIGOPR);
+      const [response, budgetResponse] = await Promise.all([
+        api.getAssignments(selectedAssignment.CODIGOPR),
+        api.getPresupuestoEncargo(selectedAssignment.CODIGOPR),
+      ]);
       if (response.data.length === 0) {
         throw new Error('El encargo seleccionado no tiene empleados asignados.');
       }
+      const hasLoadedBudget = budgetResponse.data.length > 0;
+      const availableTariffs = Array.isArray(budgetResponse.data[0]?.PARTIDAS)
+        ? budgetResponse.data[0].PARTIDAS.filter((line) =>
+          line.tipo === 'partida' &&
+          normalize(line.unidad) === 'h' &&
+          line.precio_unidad !== null &&
+          line.precio_unidad !== undefined &&
+          line.precio_unidad !== '' &&
+          Number.isFinite(Number(line.precio_unidad))
+        )
+        : [];
       const activeRefs = new Set(
         employees.filter(isActiveEmployee).map((employee) => String(employee.REF_PER))
       );
@@ -483,6 +603,8 @@ const PlanificacionPage = () => {
       if (activeAssignments.length === 0) {
         throw new Error('El encargo no tiene empleados activos (ACTIVO = S) y sin fecha de baja asignados.');
       }
+      setHasBudget(hasLoadedBudget);
+      setTariffOptions(availableTariffs);
       setAssignmentRows(activeAssignments);
     } catch (error) {
       setErrorMessage(`No se pudo preparar la planificación: ${error.message}`);
@@ -492,11 +614,22 @@ const PlanificacionPage = () => {
   };
 
   const handleSave = async () => {
-    if (!result || result.error || !selectedAssignment || isReadOnly) return;
+    if (!result || result.error || !selectedAssignment || isReadOnly ||
+        unresolvedRows.length > 0 || pendingTariffEmployees.length > 0) return;
     setSaving(true);
     setErrorMessage('');
     setSuccessMessage('');
     try {
+      const usedEmployeeRefs = new Set(result.employees.map((employee) => String(employee.refPer)));
+      const tariffUpdates = Object.entries(manualTariffs)
+        .filter(([refPer]) => usedEmployeeRefs.has(refPer))
+        .filter(([, tariffIndex]) => tariffIndex !== '')
+        .map(([refPer, tariffIndex]) => api.updateAssignment({
+          REF_PER: refPer,
+          CODIGOPR: String(selectedAssignment.CODIGOPR),
+          TARIFA: Number(tariffOptions[Number(tariffIndex)]?.precio_unidad),
+        }));
+      await Promise.all(tariffUpdates);
       await api.savePlanificacion(result.profiles.map(({ perfil, horas, importe }) => ({
         codigopr: String(selectedAssignment.CODIGOPR),
         anio: result.year,
@@ -529,7 +662,7 @@ const PlanificacionPage = () => {
   const candidateEmployees = assignmentRows
     ? [...new Map(assignmentRows
       .map((assignment) => peopleByRef.get(String(assignment.REF_PER)))
-      .filter((person) => isActiveEmployee(person) && person?.PERFIL && person?.NOMBRE)
+      .filter((person) => isActiveEmployee(person) && person?.NOMBRE && (hasBudget || person?.PERFIL))
       .map((person) => [String(person.REF_PER), person])).values()]
       .sort((a, b) =>
       `${a.APELLIDO1 || ''} ${a.APELLIDO2 || ''} ${a.NOMBRE || ''}`.localeCompare(
@@ -542,7 +675,7 @@ const PlanificacionPage = () => {
     ...(assignmentRows || [])
       .filter((assignment) => {
         const person = peopleByRef.get(String(assignment.REF_PER));
-        return isActiveEmployee(person) && person?.PERFIL && person?.NOMBRE;
+        return isActiveEmployee(person) && person?.NOMBRE && (hasBudget || person?.PERFIL);
       })
       .map((assignment) => String(assignment.REF_PER)),
     ...Object.values(manualSelections),
@@ -661,6 +794,9 @@ const PlanificacionPage = () => {
                 setSelectedCode(event.target.value);
                 setAssignmentRows(null);
                 setManualSelections({});
+                setManualTariffs({});
+                setTariffOptions([]);
+                setHasBudget(false);
                 setSuccessMessage('');
               }}
               disabled={loading || calculating || saving}
@@ -683,6 +819,9 @@ const PlanificacionPage = () => {
                 setMonthValue(event.target.value);
                 setAssignmentRows(null);
                 setManualSelections({});
+                setManualTariffs({});
+                setTariffOptions([]);
+                setHasBudget(false);
                 setSuccessMessage('');
               }}
               disabled={loading || calculating || saving}
@@ -744,6 +883,82 @@ const PlanificacionPage = () => {
         </section>
       )}
 
+      {assignmentRows && hasBudget && tariffEmployees.length > 0 && (
+        <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.4rem' }}>
+            Tarifas de empleados ({tariffEmployees.length})
+          </h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Asigna a cada empleado afectado una partida horaria del presupuesto. Se utilizará su perfil para agrupar la planificación y la tarifa se guardará en la asignación del encargo.
+          </p>
+          {tariffOptions.length === 0 ? (
+            <p role="alert" style={{ color: '#b42318' }}>
+              El presupuesto de este encargo no contiene partidas por hora disponibles.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.85rem' }}>
+              {tariffEmployees.map((employee) => (
+                <label
+                  key={employee.REF_PER}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(180px, 1fr) minmax(260px, 2fr)',
+                    gap: '0.8rem',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span>
+                    <strong>{[employee.NOMBRE, employee.APELLIDO1, employee.APELLIDO2].filter(Boolean).join(' ')}</strong>
+                    <span style={{ display: 'block', color: 'var(--text-muted)' }}>
+                      {employee.tariffIssue === 'missing'
+                        ? 'No tiene tarifa asignada'
+                        : employee.tariffIssue === 'unmatched'
+                          ? 'La tarifa asignada no está en el presupuesto'
+                          : employee.tariffIssue === 'ambiguous'
+                            ? 'La tarifa coincide con varios perfiles del presupuesto'
+                            : 'No se identifica el perfil en la partida'}
+                    </span>
+                  </span>
+                  <select
+                    value={manualTariffs[String(employee.REF_PER)] ?? ''}
+                    onChange={(event) => {
+                      const tariffIndex = event.target.value;
+                      setManualTariffs((current) => {
+                        const updated = { ...current };
+                        if (tariffIndex !== '') updated[String(employee.REF_PER)] = tariffIndex;
+                        else delete updated[String(employee.REF_PER)];
+                        return updated;
+                      });
+                      setSuccessMessage('');
+                    }}
+                    disabled={calculating || saving}
+                    style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
+                  >
+                    <option value="">
+                      {manualTariffs[String(employee.REF_PER)] !== undefined
+                        ? 'Selecciona otra tarifa por hora'
+                        : 'Selecciona una tarifa por hora'}
+                    </option>
+                    {tariffOptions.map((tariff, index) => (
+                      <option key={`${tariff.codigo || tariff.resumen}-${index}`} value={String(index)}>
+                        {[tariff.codigo, tariff.resumen].filter(Boolean).join(' — ')}
+                        {' · '}
+                        {formatCurrency(Number(tariff.precio_unidad))}/h
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          )}
+          {pendingTariffEmployees.length > 0 && tariffOptions.length > 0 && (
+            <p style={{ color: '#9a6700', marginTop: '1rem' }}>
+              Faltan {pendingTariffEmployees.length} tarifa(s) por asignar antes de guardar la planificación.
+            </p>
+          )}
+        </section>
+      )}
+
       {result && !result.error && (
         <>
           <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
@@ -762,9 +977,19 @@ const PlanificacionPage = () => {
                 </p>
               </div>
               {!isReadOnly && (
-                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={saving || unresolvedRows.length > 0 || pendingTariffEmployees.length > 0}
+                >
                   <Save size={17} />
-                  {saving ? 'Guardando…' : 'Guardar planificación'}
+                  {saving
+                    ? 'Guardando…'
+                    : pendingTariffEmployees.length > 0
+                      ? 'Asigna las tarifas pendientes'
+                      : unresolvedRows.length > 0
+                        ? 'Asocia los empleados pendientes'
+                        : 'Guardar planificación'}
                 </button>
               )}
             </div>

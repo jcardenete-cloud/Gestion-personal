@@ -1158,9 +1158,9 @@ const PlanificacionPage = () => {
                     <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left' }}>
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', fontWeight: 700 }}>Perfil</th>
                           {consultationMonths.map((month) => (
-                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', textTransform: 'capitalize' }}>
+                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', textTransform: 'capitalize', fontWeight: 700 }}>
                               {new Date(`${month}-01T12:00:00`).toLocaleDateString('es-ES', {
                                 month: 'long', year: 'numeric',
                               })}
@@ -1170,8 +1170,8 @@ const PlanificacionPage = () => {
                         <tr>
                           {consultationMonths.map((month) => (
                             <React.Fragment key={month}>
-                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Horas</th>
-                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Importe</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontWeight: 700 }}>Horas</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontWeight: 700 }}>Importe</th>
                             </React.Fragment>
                           ))}
                         </tr>
@@ -1199,13 +1199,13 @@ const PlanificacionPage = () => {
                           );
                         })}
                         <tr>
-                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
+                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', fontWeight: 700 }}>Total</th>
                           {consultationTotals.map((total, index) => (
                             <React.Fragment key={consultationMonths[index]}>
-                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                                 {formatHours(total)}
                               </th>
-                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                                 {formatCurrency(consultationAmountTotals[index])}
                               </th>
                             </React.Fragment>

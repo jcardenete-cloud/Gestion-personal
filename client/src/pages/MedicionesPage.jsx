@@ -1005,9 +1005,9 @@ const MedicionesPage = () => {
                     <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', marginTop: 0 }}>
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', fontWeight: 700 }}>Perfil</th>
                           {consultationMonths.map((month) => (
-                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize', textAlign: 'center' }}>
+                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textTransform: 'capitalize', textAlign: 'center', fontWeight: 700 }}>
                               <span style={{ display: 'block', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                 {formatMonth(month)}
                               </span>
@@ -1017,8 +1017,8 @@ const MedicionesPage = () => {
                         <tr>
                           {consultationMonths.map((month) => (
                             <React.Fragment key={month}>
-                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Horas</th>
-                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Importe</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontWeight: 700 }}>Horas</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontWeight: 700 }}>Importe</th>
                             </React.Fragment>
                           ))}
                         </tr>
@@ -1046,13 +1046,13 @@ const MedicionesPage = () => {
                           );
                         })}
                         <tr>
-                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
+                          <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', fontWeight: 700 }}>Total</th>
                           {consultationSummary.totals.map((total, index) => (
                             <React.Fragment key={consultationMonths[index]}>
-                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                                 {formatHours(total)}
                               </th>
-                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                                 {formatCurrency(consultationSummary.amountTotals[index])}
                               </th>
                             </React.Fragment>

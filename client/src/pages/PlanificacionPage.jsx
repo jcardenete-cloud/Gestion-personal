@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
+  Search,
   Users,
 } from 'lucide-react';
 import api from '../api';
@@ -105,6 +106,7 @@ const getPlanningSummary = ({
   holidays,
   config,
   monthValue,
+  projectEndDate,
 }) => {
   if (!assignmentRows) return null;
   const scheduledEmployees = getEmployeeSchedule(assignmentRows, employees, manualSelections);
@@ -126,6 +128,8 @@ const getPlanningSummary = ({
 
   const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
   const lastDay = toDateString(new Date(Date.UTC(year, month, 0)));
+  const projectEnd = toIsoDate(projectEndDate, 'FIN del encargo');
+  const calculationLastDay = projectEnd && projectEnd < lastDay ? projectEnd : lastDay;
   const holidayDatesByLocation = new Map();
   holidays.forEach((holiday) => {
     if (Number(holiday.YEAR) !== year) return;
@@ -142,7 +146,7 @@ const getPlanningSummary = ({
       ...nationalHolidays,
       ...(holidayDatesByLocation.get(String(employee.REF_UBI)) || []),
     ]);
-    const vacationDates = getVacationDates(vacations, employee.REF_PER, firstDay, lastDay);
+    const vacationDates = getVacationDates(vacations, employee.REF_PER, firstDay, calculationLastDay);
     const assignmentStart = toIsoDate(assignment.ALTA, 'ALTA de la asignación');
     const assignmentEnd = toIsoDate(assignment.BAJA, 'BAJA de la asignación');
     if (assignmentStart && assignmentEnd && assignmentStart > assignmentEnd) {
@@ -162,7 +166,7 @@ const getPlanningSummary = ({
     let hours = 0;
 
     const date = new Date(`${firstDay}T00:00:00Z`);
-    const finalDate = new Date(`${lastDay}T00:00:00Z`);
+    const finalDate = new Date(`${calculationLastDay}T00:00:00Z`);
     while (date <= finalDate) {
       const isoDate = toDateString(date);
       const weekday = date.getUTCDay();
@@ -232,7 +236,7 @@ const getPlanningSummary = ({
     year,
     month,
     firstDay,
-    lastDay,
+    lastDay: calculationLastDay,
     employees: employeeRows.map((employee) => ({
       ...employee,
       importe: employee.tarifa === null || !Number.isFinite(employee.tarifa)
@@ -261,8 +265,10 @@ const PlanificacionPage = () => {
   const [holidays, setHolidays] = useState([]);
   const [config, setConfig] = useState([]);
   const [selectedCode, setSelectedCode] = useState('');
+  const [assignmentSearch, setAssignmentSearch] = useState('');
   const [activeTab, setActiveTab] = useState('calculation');
   const [consultationCode, setConsultationCode] = useState('');
+  const [consultationSearch, setConsultationSearch] = useState('');
   const [savedPlanning, setSavedPlanning] = useState([]);
   const [consultationMonth, setConsultationMonth] = useState(currentMonth);
   const [consultationLoading, setConsultationLoading] = useState(false);
@@ -344,12 +350,28 @@ const PlanificacionPage = () => {
     () => sortedAssignments.find((item) => String(item.CODIGOPR) === selectedCode),
     [sortedAssignments, selectedCode]
   );
+  const filteredAssignments = useMemo(() => {
+    const search = normalize(assignmentSearch);
+    return sortedAssignments.filter((item) =>
+      !search || String(item.CODIGOPR) === selectedCode || normalize(
+        `${item.CODIGOPR ?? ''} ${item.DESCRIPCION ?? ''} ${item.NOMBRE ?? ''}`
+      ).includes(search)
+    );
+  }, [sortedAssignments, assignmentSearch, selectedCode]);
   const activeProjects = useMemo(
     () => sortedAssignments.filter((item) =>
       item.FIN_REAL === null || item.FIN_REAL === undefined || item.FIN_REAL === ''
     ),
     [sortedAssignments]
   );
+  const filteredActiveProjects = useMemo(() => {
+    const search = normalize(consultationSearch);
+    return activeProjects.filter((item) =>
+      !search || String(item.CODIGOPR) === consultationCode || normalize(
+        `${item.CODIGOPR ?? ''} ${item.DESCRIPCION ?? ''} ${item.NOMBRE ?? ''}`
+      ).includes(search)
+    );
+  }, [activeProjects, consultationSearch, consultationCode]);
   const consultationProject = useMemo(
     () => activeProjects.find((item) => String(item.CODIGOPR) === consultationCode),
     [activeProjects, consultationCode]
@@ -420,12 +442,13 @@ const PlanificacionPage = () => {
           holidays,
           config,
           monthValue,
+          projectEndDate: selectedAssignment?.FIN,
         });
       } catch (error) {
         return { error: error.message };
       }
     },
-    [assignmentRows, employees, manualSelections, vacations, holidays, config, monthValue]
+    [assignmentRows, employees, manualSelections, vacations, holidays, config, monthValue, selectedAssignment]
   );
 
   const handleCalculate = async () => {
@@ -617,6 +640,20 @@ const PlanificacionPage = () => {
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
+            Buscar encargo por código o descripción
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-card)', borderRadius: '6px', padding: '0 0.65rem', background: 'var(--input-bg)' }}>
+              <Search size={17} aria-hidden="true" />
+              <input
+                type="search"
+                value={assignmentSearch}
+                onChange={(event) => setAssignmentSearch(event.target.value)}
+                placeholder="Código o descripción"
+                disabled={loading || calculating || saving}
+                style={{ width: '100%', padding: '0.65rem 0', border: 'none', outline: 'none', background: 'transparent', color: 'var(--input-text)' }}
+              />
+            </span>
+          </label>
+          <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
             Encargo (ordenado por código)
             <select
               value={selectedCode}
@@ -630,9 +667,9 @@ const PlanificacionPage = () => {
               style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
             >
               <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
-              {sortedAssignments.map((assignment) => (
+              {filteredAssignments.map((assignment) => (
                 <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
-                  {assignment.CODIGOPR} — {assignment.NOMBRE}
+                  {assignment.CODIGOPR} — {assignment.DESCRIPCION || assignment.NOMBRE}
                 </option>
               ))}
             </select>
@@ -794,7 +831,21 @@ const PlanificacionPage = () => {
         <>
           <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
             <label style={{ display: 'grid', gap: '0.45rem', maxWidth: '600px', fontWeight: 600 }}>
-              Proyecto activo
+              Buscar encargo activo por código o descripción
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-card)', borderRadius: '6px', padding: '0 0.65rem', background: 'var(--input-bg)' }}>
+                <Search size={17} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={consultationSearch}
+                  onChange={(event) => setConsultationSearch(event.target.value)}
+                  placeholder="Código o descripción"
+                  disabled={loading || consultationLoading}
+                  style={{ width: '100%', padding: '0.65rem 0', border: 'none', outline: 'none', background: 'transparent', color: 'var(--input-text)' }}
+                />
+              </span>
+            </label>
+            <label style={{ display: 'grid', gap: '0.45rem', maxWidth: '600px', marginTop: '0.75rem', fontWeight: 600 }}>
+              Encargo activo
               <select
                 value={consultationCode}
                 onChange={(event) => {
@@ -805,9 +856,9 @@ const PlanificacionPage = () => {
                 style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
               >
                 <option value="">{loading ? 'Cargando proyectos…' : 'Selecciona un proyecto activo'}</option>
-                {activeProjects.map((project) => (
+                {filteredActiveProjects.map((project) => (
                   <option key={project.CODIGOPR} value={String(project.CODIGOPR)}>
-                    {project.CODIGOPR} — {project.NOMBRE}
+                    {project.CODIGOPR} — {project.DESCRIPCION || project.NOMBRE}
                   </option>
                 ))}
               </select>

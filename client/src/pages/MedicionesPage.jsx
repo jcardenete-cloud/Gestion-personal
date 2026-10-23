@@ -91,6 +91,27 @@ const sameTariff = (first, second) => {
     Math.abs(firstValue - secondValue) < 0.000001;
 };
 
+const getBudgetProfile = (tariff) =>
+  String(tariff?.resumen || tariff?.codigo || '').trim();
+
+const getBudgetTariffIssue = (parsedData, tariffValue) => {
+  if (!parsedData.hasBudget) return null;
+  if (tariffValue == null || tariffValue === '' || !Number.isFinite(Number(tariffValue))) {
+    return 'missing';
+  }
+  const matchingOptions = parsedData.tariffOptions.filter((option) =>
+    sameTariff(option.precio_unidad, tariffValue)
+  );
+  if (matchingOptions.length === 0) return 'unmatched';
+  const matchingProfiles = new Map(matchingOptions
+    .map((option) => getBudgetProfile(option))
+    .filter(Boolean)
+    .map((name) => [normalize(name), name]));
+  if (matchingProfiles.size > 1) return 'ambiguous';
+  if (matchingProfiles.size === 0) return 'unidentified';
+  return null;
+};
+
 const parseWorkbook = (workbook, projectAssignment, employees, assignedEmployees) => {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) throw new Error('El libro de Excel no contiene ninguna hoja.');
@@ -194,34 +215,31 @@ const buildMeasurementResult = (parsedData, manualSelections, manualTariffs) => 
     const assignment = parsedData.assignedEmployees.find(
       (candidate) => String(candidate.REF_PER) === String(employee.REF_PER)
     );
-    const selectedTariff = manualTariffs[String(employee.REF_PER)];
-    const tariff = selectedTariff !== undefined && selectedTariff !== ''
-      ? Number(selectedTariff)
+    const selectedTariffIndex = manualTariffs[String(employee.REF_PER)];
+    const selectedTariffOption = selectedTariffIndex !== undefined &&
+      selectedTariffIndex !== ''
+      ? parsedData.tariffOptions[Number(selectedTariffIndex)]
+      : null;
+    const tariff = selectedTariffOption
+      ? Number(selectedTariffOption.precio_unidad)
       : assignment?.TARIFA == null || assignment.TARIFA === ''
       ? null
       : Number(assignment.TARIFA);
     let profile;
     if (parsedData.hasBudget) {
-      if (tariff === null || !Number.isFinite(tariff)) {
-        return { error: `El empleado seleccionado para "${record.name}" no tiene una tarifa asignada. Asigna una tarifa del presupuesto.` };
+      if (selectedTariffOption) {
+        profile = getBudgetProfile(selectedTariffOption);
+      } else {
+        const issue = getBudgetTariffIssue(parsedData, tariff);
+        if (issue) {
+          return { error: `No se pudo identificar la tarifa del empleado "${record.name}". Selecciona una partida del presupuesto para este empleado.` };
+        }
+        profile = parsedData.tariffOptions
+          .filter((option) => sameTariff(option.precio_unidad, tariff))
+          .map((option) => getBudgetProfile(option))
+          .find(Boolean) || '';
       }
-      const matchingTariffs = parsedData.tariffOptions.filter((option) =>
-        sameTariff(option.precio_unidad, tariff)
-      );
-      if (matchingTariffs.length === 0) {
-        return { error: `La tarifa asignada al empleado "${record.name}" no coincide con ninguna tarifa horaria del presupuesto.` };
-      }
-      const matchingProfiles = new Map(matchingTariffs
-        .map((option) => String(option.resumen || option.codigo || '').trim())
-        .filter(Boolean)
-        .map((name) => [normalize(name), name]));
-      if (matchingProfiles.size > 1) {
-        return { error: `La tarifa asignada al empleado "${record.name}" corresponde a varias partidas del presupuesto y no permite identificar un perfil único.` };
-      }
-      profile = matchingProfiles.values().next().value || '';
-      if (!profile) {
-        return { error: `La tarifa asignada al empleado "${record.name}" no tiene un perfil identificado en el presupuesto.` };
-      }
+      if (!profile) return { error: `La partida seleccionada para "${record.name}" no tiene un perfil identificado en el presupuesto.` };
     } else {
       profile = String(employee.PERFIL ?? '').trim();
       if (!profile) {
@@ -326,15 +344,28 @@ const MedicionesPage = () => {
         (candidate) => String(candidate.REF_PER) === refPer
       );
       const existingTariff = Number(assignment?.TARIFA);
+      const selectedTariffIndex = manualTariffs[refPer];
+      const selectedTariffOption = selectedTariffIndex !== undefined &&
+        selectedTariffIndex !== ''
+        ? parsedData.tariffOptions[Number(selectedTariffIndex)]
+        : null;
       const hasValidTariff = assignment?.TARIFA !== null &&
         assignment?.TARIFA !== undefined &&
         assignment.TARIFA !== '' &&
         Number.isFinite(existingTariff) &&
-        (!parsedData.hasBudget || parsedData.tariffOptions.some((option) =>
-          sameTariff(option.precio_unidad, existingTariff)
-        ));
-      if (!hasValidTariff && !employeesNeedingTariff.has(refPer)) {
-        employeesNeedingTariff.set(refPer, employee);
+        !getBudgetTariffIssue(parsedData, existingTariff);
+      const hasValidManualTariff = selectedTariffOption &&
+        getBudgetProfile(selectedTariffOption);
+      const needsTariff = selectedTariffOption
+        ? !hasValidManualTariff
+        : !hasValidTariff;
+      if (needsTariff && !employeesNeedingTariff.has(refPer)) {
+        employeesNeedingTariff.set(refPer, {
+          ...employee,
+          tariffIssue: selectedTariffOption
+            ? 'unidentified'
+            : getBudgetTariffIssue(parsedData, assignment?.TARIFA),
+        });
       }
     });
     return [...employeesNeedingTariff.values()].sort((a, b) =>
@@ -343,14 +374,15 @@ const MedicionesPage = () => {
         'es'
       )
     );
-  }, [parsedData, manualSelections]);
+  }, [parsedData, manualSelections, manualTariffs]);
   const result = useMemo(
     () => buildMeasurementResult(parsedData, manualSelections, manualTariffs),
     [parsedData, manualSelections, manualTariffs]
   );
   const pendingTariffEmployees = useMemo(
     () => tariffEmployees.filter(
-      (employee) => !manualTariffs[String(employee.REF_PER)]
+      (employee) => manualTariffs[String(employee.REF_PER)] === undefined ||
+        manualTariffs[String(employee.REF_PER)] === ''
     ),
     [tariffEmployees, manualTariffs]
   );
@@ -556,10 +588,10 @@ const MedicionesPage = () => {
       const tariffUpdates = Object.entries(manualTariffs)
         .filter(([refPer]) => usedEmployeeRefs.has(refPer))
         .filter(([, tariff]) => tariff !== '')
-        .map(([refPer, tariff]) => api.updateAssignment({
+        .map(([refPer, tariffIndex]) => api.updateAssignment({
           REF_PER: refPer,
           CODIGOPR: parsedData.codigopr,
-          TARIFA: Number(tariff),
+          TARIFA: Number(parsedData.tariffOptions[Number(tariffIndex)]?.precio_unidad),
         }));
       await Promise.all(tariffUpdates);
 
@@ -769,16 +801,24 @@ const MedicionesPage = () => {
                   <span>
                     <strong>{[employee.NOMBRE, employee.APELLIDO1, employee.APELLIDO2].filter(Boolean).join(' ')}</strong>
                     <span style={{ display: 'block', color: 'var(--text-muted)' }}>
-                      {employee.PERFIL || 'Sin perfil'}
+                      {employee.tariffIssue === 'missing'
+                        ? 'No tiene tarifa asignada'
+                        : employee.tariffIssue === 'unmatched'
+                          ? 'La tarifa asignada no está en el presupuesto'
+                          : employee.tariffIssue === 'ambiguous'
+                            ? 'La tarifa coincide con varios perfiles del presupuesto'
+                            : employee.tariffIssue === 'unidentified'
+                              ? 'No se identifica el perfil en la partida'
+                              : 'Selecciona una tarifa del presupuesto'}
                     </span>
                   </span>
                   <select
-                    value={manualTariffs[String(employee.REF_PER)] || ''}
+                    value={manualTariffs[String(employee.REF_PER)] ?? ''}
                     onChange={(event) => {
-                      const tariff = event.target.value;
+                      const tariffIndex = event.target.value;
                       setManualTariffs((current) => {
                         const updated = { ...current };
-                        if (tariff) updated[String(employee.REF_PER)] = tariff;
+                        if (tariffIndex !== '') updated[String(employee.REF_PER)] = tariffIndex;
                         else delete updated[String(employee.REF_PER)];
                         return updated;
                       });
@@ -788,12 +828,12 @@ const MedicionesPage = () => {
                     style={{ padding: '0.65rem', border: '1px solid var(--border-card)', borderRadius: '6px', background: 'var(--input-bg)', color: 'var(--input-text)' }}
                   >
                     <option value="">
-                      {manualTariffs[String(employee.REF_PER)]
+                      {manualTariffs[String(employee.REF_PER)] !== undefined
                         ? 'Selecciona otra tarifa por hora'
                         : 'Selecciona una tarifa por hora'}
                     </option>
                     {parsedData.tariffOptions.map((tariff, index) => (
-                      <option key={`${tariff.codigo || tariff.resumen}-${index}`} value={String(tariff.precio_unidad)}>
+                      <option key={`${tariff.codigo || tariff.resumen}-${index}`} value={String(index)}>
                         {[tariff.codigo, tariff.resumen].filter(Boolean).join(' — ')}
                         {' · '}
                         {formatCurrency(Number(tariff.precio_unidad))}/h

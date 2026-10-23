@@ -5,9 +5,16 @@ create table if not exists jcf.planificacion (
   mes smallint not null check (mes between 1 and 12),
   perfil text not null,
   horas numeric(12, 2) not null check (horas >= 0),
+  importe numeric(14, 2) check (importe >= 0),
   created_at timestamptz not null default now(),
   unique (codigopr, anio, mes, perfil)
 );
+
+alter table jcf.planificacion
+  add column if not exists importe numeric(14, 2) check (importe >= 0);
+
+comment on column jcf.planificacion.importe is
+  'Importe mensual planificado por perfil, calculado como suma de horas individuales por tarifa asignada; NULL para planificaciones antiguas sin importe.';
 
 alter table jcf.planificacion enable row level security;
 

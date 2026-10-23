@@ -21,9 +21,18 @@ const normalize = (value) => String(value ?? '')
   .replace(/\s+/g, ' ');
 
 const formatHours = (hours) => hours.toLocaleString('es-ES', {
+  useGrouping: true,
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+const formatCurrency = (amount) => amount == null
+  ? '—'
+  : `${Number(amount).toLocaleString('es-ES', {
+    useGrouping: true,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} €`;
 
 const isActiveEmployee = (employee) =>
   String(employee?.ACTIVO ?? '').trim().toUpperCase() === 'S';
@@ -145,6 +154,9 @@ const getPlanningSummary = ({
     if (!Number.isFinite(assignmentPercentage) || assignmentPercentage < 0 || assignmentPercentage > 100) {
       throw new Error(`El porcentaje de asignación del empleado ${employee.REF_PER} debe estar entre 0 y 100.`);
     }
+    const assignmentTariff = assignment.TARIFA == null || assignment.TARIFA === ''
+      ? null
+      : Number(assignment.TARIFA);
     let workingDays = 0;
     let vacationDays = 0;
     let hours = 0;
@@ -190,15 +202,29 @@ const getPlanningSummary = ({
       workingDays,
       vacationDays,
       horas: Math.round((hours + Number.EPSILON) * 100) / 100,
+      tarifa: assignmentTariff !== null && Number.isFinite(assignmentTariff)
+        ? assignmentTariff
+        : null,
     };
   });
 
   const byProfile = new Map();
   employeeRows.forEach((employee) => {
     const profileKey = normalize(employee.perfil);
-    const item = byProfile.get(profileKey) || { perfil: employee.perfil, horas: 0, empleados: 0 };
+    const item = byProfile.get(profileKey) || {
+      perfil: employee.perfil,
+      horas: 0,
+      empleados: 0,
+      importe: 0,
+      tarifasIncompletas: 0,
+    };
     item.horas += employee.horas;
     item.empleados += 1;
+    if (employee.tarifa === null || !Number.isFinite(employee.tarifa)) {
+      item.tarifasIncompletas += 1;
+    } else {
+      item.importe += employee.horas * employee.tarifa;
+    }
     byProfile.set(profileKey, item);
   });
 
@@ -207,9 +233,20 @@ const getPlanningSummary = ({
     month,
     firstDay,
     lastDay,
-    employees: employeeRows,
+    employees: employeeRows.map((employee) => ({
+      ...employee,
+      importe: employee.tarifa === null || !Number.isFinite(employee.tarifa)
+        ? null
+        : Math.round((employee.horas * employee.tarifa + Number.EPSILON) * 100) / 100,
+    })),
     profiles: [...byProfile.values()]
-      .map((item) => ({ ...item, horas: Math.round((item.horas + Number.EPSILON) * 100) / 100 }))
+      .map((item) => ({
+        ...item,
+        horas: Math.round((item.horas + Number.EPSILON) * 100) / 100,
+        importe: item.tarifasIncompletas > 0
+          ? null
+          : Math.round((item.importe + Number.EPSILON) * 100) / 100,
+      }))
       .sort((a, b) => a.perfil.localeCompare(b.perfil, 'es')),
   };
 };
@@ -328,6 +365,8 @@ const PlanificacionPage = () => {
   const consultationMonths = Array.from({ length: 3 }, (_, index) => shiftMonth(consultationMonth, index));
   const consultationProfileMap = new Map();
   const consultationHoursByProfileMonth = new Map();
+  const consultationAmountsByProfileMonth = new Map();
+  const consultationIncompleteAmounts = new Set();
   savedPlanning.forEach((row) => {
     const profileKey = normalize(row.PERFIL);
     const monthKey = `${row.ANIO}-${String(row.MES).padStart(2, '0')}`;
@@ -336,6 +375,14 @@ const PlanificacionPage = () => {
     const monthHours = consultationHoursByProfileMonth.get(profileKey) || new Map();
     monthHours.set(monthKey, (monthHours.get(monthKey) || 0) + Number(row.HORAS || 0));
     consultationHoursByProfileMonth.set(profileKey, monthHours);
+    const amountKey = `${profileKey}|${monthKey}`;
+    if (row.IMPORTE == null || row.IMPORTE === '' || !Number.isFinite(Number(row.IMPORTE))) {
+      consultationIncompleteAmounts.add(amountKey);
+    } else {
+      const monthAmounts = consultationAmountsByProfileMonth.get(profileKey) || new Map();
+      monthAmounts.set(monthKey, (monthAmounts.get(monthKey) || 0) + Number(row.IMPORTE));
+      consultationAmountsByProfileMonth.set(profileKey, monthAmounts);
+    }
   });
   const consultationProfiles = [...consultationProfileMap.values()]
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
@@ -345,6 +392,15 @@ const PlanificacionPage = () => {
       0
     )
   );
+  const consultationAmountTotals = consultationMonths.map((month) => {
+    if (consultationProfiles.some((profile) =>
+      consultationIncompleteAmounts.has(`${profile.key}|${month}`)
+    )) return null;
+    return [...consultationAmountsByProfileMonth.values()].reduce(
+      (total, amountsByMonth) => total + (amountsByMonth.get(month) || 0),
+      0
+    );
+  });
   const unresolvedRows = useMemo(() => {
     if (!assignmentRows) return [];
     const employeeMap = new Map(employees.map((person) => [String(person.REF_PER), person]));
@@ -418,12 +474,13 @@ const PlanificacionPage = () => {
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      await api.savePlanificacion(result.profiles.map(({ perfil, horas }) => ({
+      await api.savePlanificacion(result.profiles.map(({ perfil, horas, importe }) => ({
         codigopr: String(selectedAssignment.CODIGOPR),
         anio: result.year,
         mes: result.month,
         perfil,
         horas,
+        importe,
       })));
       setSuccessMessage(
         `Planificación guardada para ${selectedAssignment.CODIGOPR}, ${String(result.month).padStart(2, '0')}/${result.year}. Si ya existía, se ha actualizado.`
@@ -548,6 +605,15 @@ const PlanificacionPage = () => {
         </div>
       )}
 
+      {result.employees.some((employee) => employee.importe === null) && (
+        <div role="status" className="glass-card" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1.25rem', color: '#9a6700' }}>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span>
+            Hay empleados sin tarifa asignada en este encargo. El importe de su categoría se mostrará como — hasta asignar una tarifa.
+          </span>
+        </div>
+      )}
+
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
@@ -652,6 +718,11 @@ const PlanificacionPage = () => {
                 <p style={{ color: 'var(--text-muted)' }}>
                   {String(result.month).padStart(2, '0')}/{result.year}
                 </p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Importe total: {formatCurrency(result.profiles.some((profile) => profile.importe === null)
+                    ? null
+                    : result.profiles.reduce((total, profile) => total + profile.importe, 0))}
+                </p>
               </div>
               {!isReadOnly && (
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -667,7 +738,7 @@ const PlanificacionPage = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr>
-                    {['Empleado', 'Perfil', '% asignación', 'Días laborables', 'Vacaciones descontadas', 'Horas planificadas'].map((heading) => (
+                    {['Empleado', 'Perfil', '% asignación', 'Días laborables', 'Vacaciones descontadas', 'Horas planificadas', 'Tarifa €/h', 'Importe'].map((heading) => (
                       <th key={heading} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{heading}</th>
                     ))}
                   </tr>
@@ -681,6 +752,8 @@ const PlanificacionPage = () => {
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{employee.workingDays}</td>
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{employee.vacationDays}</td>
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatHours(employee.horas)}</td>
+                      <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatCurrency(employee.tarifa)}</td>
+                      <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatCurrency(employee.importe)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -689,12 +762,12 @@ const PlanificacionPage = () => {
           </section>
 
           <section className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Total de horas por perfil</h3>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Resumen por perfil</h3>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr>
-                    {['Perfil', 'Empleados', 'Horas planificadas'].map((heading) => (
+                    {['Perfil', 'Empleados', 'Horas planificadas', 'Importe'].map((heading) => (
                       <th key={heading} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{heading}</th>
                     ))}
                   </tr>
@@ -705,6 +778,7 @@ const PlanificacionPage = () => {
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.perfil}</td>
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.empleados}</td>
                       <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatHours(profile.horas)}</td>
+                      <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{formatCurrency(profile.importe)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -759,7 +833,7 @@ const PlanificacionPage = () => {
                   <h3 style={{ fontSize: '1.1rem', marginBottom: '0.3rem' }}>
                     {consultationProject?.CODIGOPR} — {consultationProject?.NOMBRE}
                   </h3>
-                  <p style={{ color: 'var(--text-muted)' }}>Resumen mensual de horas planificadas por perfil</p>
+                  <p style={{ color: 'var(--text-muted)' }}>Horas e importes mensuales planificados por perfil</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <button
@@ -802,29 +876,45 @@ const PlanificacionPage = () => {
                     </p>
                   )}
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left' }}>
                       <thead>
                         <tr>
-                          <th style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
+                          <th rowSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>Perfil</th>
                           {consultationMonths.map((month) => (
-                            <th key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>
+                            <th key={month} colSpan={2} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', textTransform: 'capitalize' }}>
                               {new Date(`${month}-01T12:00:00`).toLocaleDateString('es-ES', {
                                 month: 'long', year: 'numeric',
                               })}
                             </th>
                           ))}
                         </tr>
+                        <tr>
+                          {consultationMonths.map((month) => (
+                            <React.Fragment key={month}>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Horas</th>
+                              <th style={{ padding: '0.55rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center' }}>Importe</th>
+                            </React.Fragment>
+                          ))}
+                        </tr>
                       </thead>
                       <tbody>
                         {consultationProfiles.map((profile) => {
                           const hoursByMonth = consultationHoursByProfileMonth.get(profile.key);
+                          const amountsByMonth = consultationAmountsByProfileMonth.get(profile.key);
                           return (
                             <tr key={profile.key}>
                               <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>{profile.name}</td>
                               {consultationMonths.map((month) => (
-                                <td key={month} style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)' }}>
-                                  {formatHours(hoursByMonth.get(month) || 0)}
-                                </td>
+                                <React.Fragment key={month}>
+                                  <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatHours(hoursByMonth.get(month) || 0)}
+                                  </td>
+                                  <td style={{ padding: '0.7rem', borderBottom: '1px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                    {consultationIncompleteAmounts.has(`${profile.key}|${month}`)
+                                      ? '—'
+                                      : formatCurrency(amountsByMonth?.get(month) || 0)}
+                                  </td>
+                                </React.Fragment>
                               ))}
                             </tr>
                           );
@@ -832,16 +922,21 @@ const PlanificacionPage = () => {
                         <tr>
                           <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>Total</th>
                           {consultationTotals.map((total, index) => (
-                            <th key={consultationMonths[index]} style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)' }}>
-                              {formatHours(total)}
-                            </th>
+                            <React.Fragment key={consultationMonths[index]}>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatHours(total)}
+                              </th>
+                              <th style={{ padding: '0.7rem', borderTop: '2px solid var(--border-card)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatCurrency(consultationAmountTotals[index])}
+                              </th>
+                            </React.Fragment>
                           ))}
                         </tr>
                       </tbody>
                     </table>
                   </div>
                   <p style={{ color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-                    Los meses sin planificación guardada aparecen con 0,00 horas.
+                    Los meses sin planificación aparecen con 0,00 horas y 0,00 €. Las planificaciones anteriores a guardar importes aparecen como —.
                   </p>
                 </>
               )}

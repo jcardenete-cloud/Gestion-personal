@@ -354,7 +354,7 @@ const PlanificacionPage = () => {
     const search = normalize(assignmentSearch);
     return sortedAssignments.filter((item) =>
       !search || String(item.CODIGOPR) === selectedCode || normalize(
-        `${item.CODIGOPR ?? ''} ${item.DESCRIPCION ?? ''} ${item.NOMBRE ?? ''}`
+        `${item.CODIGOPR ?? ''} ${item.NOMBRE ?? ''}`
       ).includes(search)
     );
   }, [sortedAssignments, assignmentSearch, selectedCode]);
@@ -368,7 +368,7 @@ const PlanificacionPage = () => {
     const search = normalize(consultationSearch);
     return activeProjects.filter((item) =>
       !search || String(item.CODIGOPR) === consultationCode || normalize(
-        `${item.CODIGOPR ?? ''} ${item.DESCRIPCION ?? ''} ${item.NOMBRE ?? ''}`
+        `${item.CODIGOPR ?? ''} ${item.NOMBRE ?? ''}`
       ).includes(search)
     );
   }, [activeProjects, consultationSearch, consultationCode]);
@@ -640,14 +640,14 @@ const PlanificacionPage = () => {
       <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <label style={{ display: 'grid', gap: '0.45rem', fontWeight: 600 }}>
-            Buscar encargo por código o descripción
+            Buscar encargo por código o nombre
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-card)', borderRadius: '6px', padding: '0 0.65rem', background: 'var(--input-bg)' }}>
               <Search size={17} aria-hidden="true" />
               <input
                 type="search"
                 value={assignmentSearch}
                 onChange={(event) => setAssignmentSearch(event.target.value)}
-                placeholder="Código o descripción"
+                placeholder="Código o nombre"
                 disabled={loading || calculating || saving}
                 style={{ width: '100%', padding: '0.65rem 0', border: 'none', outline: 'none', background: 'transparent', color: 'var(--input-text)' }}
               />
@@ -669,7 +669,7 @@ const PlanificacionPage = () => {
               <option value="">{loading ? 'Cargando encargos…' : 'Selecciona un encargo'}</option>
               {filteredAssignments.map((assignment) => (
                 <option key={assignment.CODIGOPR} value={String(assignment.CODIGOPR)}>
-                  {assignment.CODIGOPR} — {assignment.DESCRIPCION || assignment.NOMBRE}
+                  {assignment.CODIGOPR} — {assignment.NOMBRE}
                 </option>
               ))}
             </select>
@@ -831,14 +831,14 @@ const PlanificacionPage = () => {
         <>
           <section className="glass-card" style={{ marginBottom: '1.25rem' }}>
             <label style={{ display: 'grid', gap: '0.45rem', maxWidth: '600px', fontWeight: 600 }}>
-              Buscar encargo activo por código o descripción
+              Buscar encargo activo por código o nombre
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-card)', borderRadius: '6px', padding: '0 0.65rem', background: 'var(--input-bg)' }}>
                 <Search size={17} aria-hidden="true" />
                 <input
                   type="search"
                   value={consultationSearch}
                   onChange={(event) => setConsultationSearch(event.target.value)}
-                  placeholder="Código o descripción"
+                  placeholder="Código o nombre"
                   disabled={loading || consultationLoading}
                   style={{ width: '100%', padding: '0.65rem 0', border: 'none', outline: 'none', background: 'transparent', color: 'var(--input-text)' }}
                 />
@@ -858,7 +858,7 @@ const PlanificacionPage = () => {
                 <option value="">{loading ? 'Cargando proyectos…' : 'Selecciona un proyecto activo'}</option>
                 {filteredActiveProjects.map((project) => (
                   <option key={project.CODIGOPR} value={String(project.CODIGOPR)}>
-                    {project.CODIGOPR} — {project.DESCRIPCION || project.NOMBRE}
+                    {project.CODIGOPR} — {project.NOMBRE}
                   </option>
                 ))}
               </select>

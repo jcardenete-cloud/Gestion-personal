@@ -83,6 +83,14 @@ const getEmployeeKeys = (employee) => {
   ].filter(Boolean);
 };
 
+const sameTariff = (first, second) => {
+  const firstValue = Number(first);
+  const secondValue = Number(second);
+  return Number.isFinite(firstValue) &&
+    Number.isFinite(secondValue) &&
+    Math.abs(firstValue - secondValue) < 0.000001;
+};
+
 const parseWorkbook = (workbook, projectAssignment, employees, assignedEmployees) => {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) throw new Error('El libro de Excel no contiene ninguna hoja.');
@@ -183,13 +191,43 @@ const buildMeasurementResult = (parsedData, manualSelections, manualTariffs) => 
     );
     if (!employee) return null;
 
-    const profile = String(employee.PERFIL ?? '').trim();
-    if (!profile) {
-      return { error: `El empleado seleccionado para "${record.name}" no tiene perfil asignado en la base de datos.` };
-    }
     const assignment = parsedData.assignedEmployees.find(
       (candidate) => String(candidate.REF_PER) === String(employee.REF_PER)
     );
+    const selectedTariff = manualTariffs[String(employee.REF_PER)];
+    const tariff = selectedTariff !== undefined && selectedTariff !== ''
+      ? Number(selectedTariff)
+      : assignment?.TARIFA == null || assignment.TARIFA === ''
+      ? null
+      : Number(assignment.TARIFA);
+    let profile;
+    if (parsedData.hasBudget) {
+      if (tariff === null || !Number.isFinite(tariff)) {
+        return { error: `El empleado seleccionado para "${record.name}" no tiene una tarifa asignada. Asigna una tarifa del presupuesto.` };
+      }
+      const matchingTariffs = parsedData.tariffOptions.filter((option) =>
+        sameTariff(option.precio_unidad, tariff)
+      );
+      if (matchingTariffs.length === 0) {
+        return { error: `La tarifa asignada al empleado "${record.name}" no coincide con ninguna tarifa horaria del presupuesto.` };
+      }
+      const matchingProfiles = new Map(matchingTariffs
+        .map((option) => String(option.resumen || option.codigo || '').trim())
+        .filter(Boolean)
+        .map((name) => [normalize(name), name]));
+      if (matchingProfiles.size > 1) {
+        return { error: `La tarifa asignada al empleado "${record.name}" corresponde a varias partidas del presupuesto y no permite identificar un perfil único.` };
+      }
+      profile = matchingProfiles.values().next().value || '';
+      if (!profile) {
+        return { error: `La tarifa asignada al empleado "${record.name}" no tiene un perfil identificado en el presupuesto.` };
+      }
+    } else {
+      profile = String(employee.PERFIL ?? '').trim();
+      if (!profile) {
+        return { error: `El empleado seleccionado para "${record.name}" no tiene perfil asignado en la base de datos.` };
+      }
+    }
     const profileKey = normalize(profile);
     const aggregate = aggregates.get(profileKey) || {
       perfil: profile,
@@ -200,12 +238,6 @@ const buildMeasurementResult = (parsedData, manualSelections, manualTariffs) => 
     };
     aggregate.horas += record.hours;
     aggregate.empleados += 1;
-    const selectedTariff = manualTariffs[String(employee.REF_PER)];
-    const tariff = selectedTariff !== undefined && selectedTariff !== ''
-      ? Number(selectedTariff)
-      : assignment?.TARIFA == null || assignment.TARIFA === ''
-      ? null
-      : Number(assignment.TARIFA);
     if (tariff === null || !Number.isFinite(tariff)) {
       aggregate.tarifasIncompletas += 1;
     } else {
@@ -297,7 +329,10 @@ const MedicionesPage = () => {
       const hasValidTariff = assignment?.TARIFA !== null &&
         assignment?.TARIFA !== undefined &&
         assignment.TARIFA !== '' &&
-        Number.isFinite(existingTariff);
+        Number.isFinite(existingTariff) &&
+        (!parsedData.hasBudget || parsedData.tariffOptions.some((option) =>
+          sameTariff(option.precio_unidad, existingTariff)
+        ));
       if (!hasValidTariff && !employeesNeedingTariff.has(refPer)) {
         employeesNeedingTariff.set(refPer, employee);
       }
@@ -475,12 +510,14 @@ const MedicionesPage = () => {
         api.getAssignments(projectAssignment.CODIGOPR),
         api.getPresupuestoEncargo(projectAssignment.CODIGOPR),
       ]);
+      const hasBudget = budgetResponse.data.length > 0;
       const tariffOptions = Array.isArray(budgetResponse.data[0]?.PARTIDAS)
         ? budgetResponse.data[0].PARTIDAS.filter((line) =>
           line.tipo === 'partida' &&
           normalize(line.unidad) === 'h' &&
           line.precio_unidad !== null &&
           line.precio_unidad !== undefined &&
+          line.precio_unidad !== '' &&
           Number.isFinite(Number(line.precio_unidad))
         )
         : [];
@@ -492,6 +529,7 @@ const MedicionesPage = () => {
         assignmentResponse.data
         ),
         tariffOptions,
+        hasBudget,
       });
     } catch (error) {
       setErrorMessage(`No se pudo procesar el fichero: ${error.message}`);

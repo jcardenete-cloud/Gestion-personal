@@ -272,6 +272,9 @@ const getPlanningSummary = ({
     };
   });
 
+  const employeeError = employeeRows.find((employee) => employee.error);
+  if (employeeError) return employeeError;
+
   const byProfile = new Map();
   employeeRows.forEach((employee) => {
     const profileKey = normalize(employee.perfil);

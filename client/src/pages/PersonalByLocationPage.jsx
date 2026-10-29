@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import api from '../api';
 import { MapPin, Search } from 'lucide-react';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const PersonalByLocationPage = () => {
     const { isReadOnly } = useAuth();

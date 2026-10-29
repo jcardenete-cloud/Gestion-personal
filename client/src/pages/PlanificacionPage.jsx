@@ -11,7 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import api from '../api';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const normalize = (value) => String(value ?? '')
   .normalize('NFD')

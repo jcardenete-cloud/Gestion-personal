@@ -204,7 +204,7 @@ const deletePersonal = (id) =>
   deleteRow('LISTA_PERSONAL', { REF_PER: id });
 
 const bulkUpdatePersonalLocation = async (ref_pers, new_location) => {
-  const results = await Promise.all(
+  await Promise.all(
     ref_pers.map((ref_per) =>
       updateRow('LISTA_PERSONAL', { REF_UBI: new_location }, { REF_PER: ref_per })
     )
@@ -335,7 +335,7 @@ const importVacaciones = async (rows) => {
     particion_num: r.particion_num != null ? parseInt(r.particion_num) : null,
     origen_fichero: r.origen_fichero || 'Carga manual',
   }));
-  const { data, error } = await table('VACACIONES').insert(payload).select();
+  const { error } = await table('VACACIONES').insert(payload);
   throwIfError({ error });
   return { data: { status: 'success', message: `${payload.length} periodos de vacaciones importados correctamente` } };
 };
@@ -484,7 +484,7 @@ const getSchema = async () => {
   };
 };
 
-const runQuery = async (_sql) => {
+const runQuery = async () => {
   throw new Error('La ejecución de SQL arbitrario no está disponible en la versión web directa de Supabase.');
 };
 

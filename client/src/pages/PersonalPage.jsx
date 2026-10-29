@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const PersonalPage = () => {
     const { isReadOnly } = useAuth();
@@ -52,18 +52,23 @@ const PersonalPage = () => {
         }
     };
 
-    const loadLocations = async () => {
-        try {
-            const res = await api.getUbicacion();
-            setLocations(res.data);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
     useEffect(() => {
-        loadData();
-        loadLocations();
+        let isMounted = true;
+        const loadInitialData = async () => {
+            try {
+                const [personalRes, locationsRes] = await Promise.all([
+                    api.getPersonal(),
+                    api.getUbicacion()
+                ]);
+                if (!isMounted) return;
+                setData(personalRes.data);
+                setLocations(locationsRes.data);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        loadInitialData();
+        return () => { isMounted = false; };
     }, []);
 
     const filteredData = data.filter(item => {
@@ -136,18 +141,11 @@ const PersonalPage = () => {
         return 0;
     });
 
-    // Reset to first page when filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filterActive, filterResp]);
-
     // Pagination logic
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = sortedFilteredData.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     const toggleColumn = (colId) => {
         setVisibleColumns(prev =>

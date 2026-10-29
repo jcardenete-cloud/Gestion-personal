@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { UserPlus, Trash2, Edit2, X, Save, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const MotionDiv = motion.div;
 

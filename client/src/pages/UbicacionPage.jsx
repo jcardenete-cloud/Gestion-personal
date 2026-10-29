@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString } from '../utils';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const UbicacionPage = () => {
     const { isReadOnly } = useAuth();
@@ -40,7 +40,19 @@ const UbicacionPage = () => {
         }
     };
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => {
+        let isMounted = true;
+        const loadInitialData = async () => {
+            try {
+                const res = await api.getUbicacion();
+                if (isMounted) setData(res.data);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        loadInitialData();
+        return () => { isMounted = false; };
+    }, []);
 
     const handleSort = (key) => {
         let direction = 'asc';

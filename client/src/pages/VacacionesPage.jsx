@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -9,7 +9,21 @@ import {
 import api from '../api';
 import { normalizeString } from '../utils';
 import * as XLSX from 'xlsx';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
+
+const normalizeVacationDate = (dateStr) => {
+    if (!dateStr) return null;
+    const clean = String(dateStr).split('T')[0];
+    return new Date(`${clean}T00:00:00`);
+};
+
+const isDateInRange = (dateKey, from, to) => {
+    const date = normalizeVacationDate(dateKey);
+    const start = normalizeVacationDate(from);
+    const end = normalizeVacationDate(to);
+    if (!date || !start || !end) return false;
+    return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
+};
 
 const VacacionesPage = () => {
     const { isReadOnly } = useAuth();
@@ -63,8 +77,6 @@ const VacacionesPage = () => {
     const [historyUserSearchOpen, setHistoryUserSearchOpen] = useState(false);
     // Calendar multi-select employees
     const [calendarFilterUsers, setCalendarFilterUsers] = useState([]); // multi-select employees
-    const [calendarFilterProject, setCalendarFilterProject] = useState('');
-    const [projectAssignments, setProjectAssignments] = useState([]);
     const [calendarUserSearch, setCalendarUserSearch] = useState('');
     const [calendarUserSearchOpen, setCalendarUserSearchOpen] = useState(false);
     const [calendarProjectSearch, setCalendarProjectSearch] = useState('');
@@ -371,7 +383,7 @@ const VacacionesPage = () => {
     };
 
     // Initial Load
-    const loadMasterData = async () => {
+    const loadMasterData = useCallback(async () => {
         try {
             const [resPersonal, resUbicacion, resEncargos] = await Promise.all([
                 api.getPersonal(),
@@ -394,10 +406,9 @@ const VacacionesPage = () => {
         } catch (err) {
             console.error("Error loading master data:", err);
         }
-    };
+    }, []);
 
-    const loadHistory = async ({ projectFilter = '', refPer = '', year = '' } = {}) => {
-        const isCalendarTab = activeTab === 'calendar';
+    const loadHistory = useCallback(async ({ year = '', isCalendarTab = false } = {}) => {
         if (isCalendarTab) {
             setCalendarLoading(true);
         } else {
@@ -405,7 +416,7 @@ const VacacionesPage = () => {
         }
         try {
             const [resVacaciones, resFicheros] = await Promise.all([
-                api.getVacaciones(refPer || null, year || null, null, projectFilter),
+                api.getVacaciones(null, year || null),
                 api.getVacacionesFicheros()
             ]);
             setLoadedVacaciones(resVacaciones.data);
@@ -416,7 +427,7 @@ const VacacionesPage = () => {
             setHistoryLoading(false);
             setCalendarLoading(false);
         }
-    };
+    }, []);
 
     const loadNoVacations = async () => {
         setNoVacationsLoading(true);
@@ -446,7 +457,7 @@ const VacacionesPage = () => {
         }
     };
 
-    const loadFestivosForCalendar = async (year) => {
+    const loadFestivosForCalendar = useCallback(async () => {
         try {
             const res = await api.getFestivos(null, null);
             const national = new Set();
@@ -466,7 +477,7 @@ const VacacionesPage = () => {
         } catch (err) {
             console.error('Error loading festivos for calendar:', err);
         }
-    };
+    }, []);
 
     const loadFestivosTab = async () => {
         setFestivosLoading(true);
@@ -503,7 +514,7 @@ const VacacionesPage = () => {
             setFestivosForm({ fecha: '', descripcion: '', ref_ubi: '' });
             loadFestivosTab();
             if (String(festivosTabYear) === String(calendarYear)) {
-                loadFestivosForCalendar(calendarYear);
+                loadFestivosForCalendar();
             }
         } catch (err) {
             console.error('Error saving festivo', err);
@@ -536,7 +547,7 @@ const VacacionesPage = () => {
             for (const f of festivos) {
                 const oldDateStr = (f.FECHA || f.fecha || '').split('T')[0];
                 if (!oldDateStr) continue;
-                const [year, month, day] = oldDateStr.split('-');
+                const [, month, day] = oldDateStr.split('-');
                 const newDateStr = `${festivosCopyToYear}-${month}-${day}`;
                 try {
                     await api.createFestivo({
@@ -554,7 +565,7 @@ const VacacionesPage = () => {
             setFestivosTabYear(festivosCopyToYear);
             loadFestivosTab();
             if (String(festivosCopyToYear) === String(calendarYear)) {
-                loadFestivosForCalendar(calendarYear);
+                loadFestivosForCalendar();
             }
         } catch (err) {
             console.error('Error copying festivos:', err);
@@ -586,7 +597,7 @@ const VacacionesPage = () => {
         try {
             await api.deleteFestivo(id);
             loadFestivosTab();
-            loadFestivosForCalendar(calendarYear);
+            loadFestivosForCalendar();
         } catch (err) {
             console.error('Error deleting festivo', err);
             alert('Error al eliminar');
@@ -656,7 +667,6 @@ const VacacionesPage = () => {
 
             // Shared styles helpers
             const mkFill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
-            const hairBorder = { style: 'hair', color: { argb: 'FFD1D5DB' } };
             const thinBorder = { style: 'thin', color: { argb: 'FF94A3B8' } };
 
             // === ROW 1: Month headers ===
@@ -923,21 +933,18 @@ const VacacionesPage = () => {
     useEffect(() => {
         loadMasterData();
         loadHistory();
-        loadFestivosForCalendar(calendarYear);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        loadFestivosForCalendar();
+    }, [loadMasterData, loadHistory, loadFestivosForCalendar]);
 
     useEffect(() => {
         if (activeTab === 'calendar') {
-            // Load all for selected year/project; employee multi-filter is applied client-side
-            loadHistory({ projectFilter: calendarFilterProject, year: calendarYear });
+            loadHistory({ year: calendarYear, isCalendarTab: true });
         }
-    }, [activeTab, calendarFilterProject, calendarYear]);
+    }, [activeTab, calendarYear, loadHistory]);
 
     useEffect(() => {
-        loadFestivosForCalendar(calendarYear);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [calendarYear]);
+        loadFestivosForCalendar();
+    }, [calendarYear, loadFestivosForCalendar]);
 
     useEffect(() => {
         if (activeTab === 'festivos') {
@@ -945,26 +952,6 @@ const VacacionesPage = () => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, festivosTabYear, festivosTabRefUbi]);
-
-    // Load assignments when a project filter is selected (calendar tab)
-    useEffect(() => {
-        let cancelled = false;
-        const loadAssignments = async () => {
-            if (!calendarFilterProject) {
-                setProjectAssignments([]);
-                return;
-            }
-            try {
-                const res = await api.getAssignments(calendarFilterProject);
-                if (!cancelled) setProjectAssignments(res.data || []);
-            } catch (err) {
-                console.error('Error loading project assignments:', err);
-                if (!cancelled) setProjectAssignments([]);
-            }
-        };
-        loadAssignments();
-        return () => { cancelled = true; };
-    }, [calendarFilterProject]);
 
     // Helper: add a person to a multi-select filter array (no duplicates)
     const addPersonToFilter = (refPer, setter) => {
@@ -1040,20 +1027,6 @@ const VacacionesPage = () => {
         return days;
     };
 
-    const normalizeVacationDate = (dateStr) => {
-        if (!dateStr) return null;
-        const clean = String(dateStr).split('T')[0];
-        return new Date(`${clean}T00:00:00`);
-    };
-
-    const isDateInRange = (dateKey, from, to) => {
-        const date = normalizeVacationDate(dateKey);
-        const start = normalizeVacationDate(from);
-        const end = normalizeVacationDate(to);
-        if (!date || !start || !end) return false;
-        return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
-    };
-
     const calendarMonths = useMemo(() => {
         const months = [];
         for (let offset = 0; offset < 3; offset++) {
@@ -1069,15 +1042,8 @@ const VacacionesPage = () => {
         return months;
     }, [calendarYear, calendarMonth]);
 
-    const calendarDays = useMemo(() => calendarMonths.flatMap(m => m.days), [calendarMonths]);
-
     const calendarEmployees = useMemo(() => {
         let list = activePersonalList;
-        // If project filter is set, limit to persons assigned to that project
-        if (calendarFilterProject) {
-            const assignedRefs = new Set((projectAssignments || []).map(a => a.REF_PER));
-            list = list.filter(person => assignedRefs.has(person.REF_PER));
-        }
         // If checkbox enabled, keep only employees that have vacations loaded for the selected year
         if (calendarOnlyWithVacations) {
             const refsWithVac = new Set((loadedVacaciones || []).map(v => v.REF_PER));
@@ -1089,7 +1055,7 @@ const VacacionesPage = () => {
             return list.filter(person => selectedSet.has(person.REF_PER));
         }
         return list;
-    }, [activePersonalList, calendarFilterUsers, calendarFilterProject, projectAssignments, calendarOnlyWithVacations, loadedVacaciones]);
+    }, [activePersonalList, calendarFilterUsers, calendarOnlyWithVacations, loadedVacaciones]);
 
     const calendarVacationsByPerson = useMemo(() => {
         const grouped = {};
@@ -1109,48 +1075,6 @@ const VacacionesPage = () => {
         return `${monthNames[calendarMonth]} ${calendarYear}`;
     }, [calendarMonth, calendarYear]);
 
-    // Helper: Map ref_ubi to city name
-    const getLocationCity = (refUbi) => {
-        if ([1, 2, 5, 8, 9, 10, 14].includes(refUbi)) return 'sevilla';
-        if (refUbi === 7) return 'huelva';
-        if (refUbi === 11) return 'merida';
-        if (refUbi === 18) return 'malaga';
-        return null;
-    };
-
-    // Helper: Get Spanish holidays for a city in a given year as Set of ISO dates
-    const getHolidaysByCity = (city, year) => {
-        const holidays = [];
-        const yearNum = Number(year);
-
-        // National holidays (all cities)
-        holidays.push(`${year}-01-01`, `${year}-01-06`, `${year}-05-01`, `${year}-08-15`, `${year}-10-12`, `${year}-11-01`, `${year}-12-25`);
-
-        // Easter (Viernes Santo = Good Friday, Lunes de Pascua = Easter Monday)
-        // For 2026: Viernes Santo = 10-04, Lunes de Pascua = 13-04
-        if (yearNum === 2026) {
-            holidays.push('2026-04-10', '2026-04-13');
-        } else if (yearNum === 2025) {
-            holidays.push('2025-04-18', '2025-04-21');
-        } else if (yearNum === 2027) {
-            holidays.push('2027-04-02', '2027-04-05');
-        }
-
-        // Local holidays by city (examples)
-        if (city === 'sevilla') {
-            // Corpus Christi varies; for 2026 = 28-05
-            holidays.push(`${year}-02-28`); // Example local holiday
-        } else if (city === 'huelva') {
-            // Additional local holidays for Huelva if any
-        } else if (city === 'merida') {
-            // Additional local holidays for Mérida if any
-        } else if (city === 'malaga') {
-            // Additional local holidays for Málaga if any
-        }
-
-        return new Set(holidays);
-    };
-
     // Date parser helper for Excel cell values
     const parseExcelDateJS = (val) => {
         if (!val) return null;
@@ -1161,7 +1085,7 @@ const VacacionesPage = () => {
         } else if (typeof val === 'number') {
             try {
                 dateObj = new Date(Math.round((val - 25569) * 86400 * 1000));
-            } catch(e) {
+            } catch {
                 return null;
             }
         }
@@ -1172,7 +1096,7 @@ const VacacionesPage = () => {
                 // sumando 12 horas para asegurar que caiga siempre en el centro del día correcto.
                 const adjustedDate = new Date(dateObj.getTime() + 12 * 60 * 60 * 1000);
                 return adjustedDate.toISOString().split('T')[0];
-            } catch(e) {
+            } catch {
                 return null;
             }
         }
@@ -1750,7 +1674,6 @@ const VacacionesPage = () => {
 
     // Calculate dynamic stats
     const totalDays = loadedVacaciones.reduce((sum, item) => sum + (parseFloat(item.DURACION) || 0), 0);
-    const uniqueEmployeesCount = new Set(loadedVacaciones.map(item => item.REF_PER)).size;
     const activeEmployeeRefs = new Set(activePersonalList.map(p => p.REF_PER));
     const activeEmployeesWithVacationsCount = new Set(loadedVacaciones
         .map(item => item.REF_PER)
@@ -1852,7 +1775,7 @@ const VacacionesPage = () => {
                     <Clock size={16} /> Historial y Consultas
                 </button>
                 <button
-                    onClick={() => { setActiveTab('calendar'); setCalendarMonth(new Date().getMonth()); loadHistory({ projectFilter: calendarFilterProject, refPer: calendarFilterUser, year: calendarYear }); }}
+                    onClick={() => { setActiveTab('calendar'); setCalendarMonth(new Date().getMonth()); }}
                     style={{
                         padding: '0.8rem 1.5rem',
                         fontSize: '0.9rem',
@@ -3021,9 +2944,6 @@ const VacacionesPage = () => {
                                                                 // Check if this is a bridge day (Friday/Monday adjacent to Tuesday/Thursday holiday)
                                                                 let isBridge = false;
                                                                 if (!isWeekend && !isHoliday) {
-                                                                    const dayNum = parseInt(day.iso.split('-')[2], 10);
-                                                                    const monthStr = day.iso.split('-')[1];
-                                                                    const yearStr = day.iso.split('-')[0];
                                                                     // Check Monday (weekday=1): look for holiday on Tuesday (weekday=2)
                                                                     if (day.weekday === 1) {
                                                                         const tueDate = new Date(day.iso);

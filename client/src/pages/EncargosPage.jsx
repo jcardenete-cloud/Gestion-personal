@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import api from '../api';
 import { normalizeString, formatDate } from '../utils';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../authContext';
 
 const EncargosPage = () => {
     const { isReadOnly } = useAuth();
@@ -53,7 +53,25 @@ const EncargosPage = () => {
         }
     };
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => {
+        let isMounted = true;
+        const loadInitialData = async () => {
+            try {
+                const res = await api.getEncargos();
+                if (!isMounted) return;
+                const sortedData = [...res.data].sort((a, b) => {
+                    if (a.CODIGOPR < b.CODIGOPR) return -1;
+                    if (a.CODIGOPR > b.CODIGOPR) return 1;
+                    return 0;
+                });
+                setData(sortedData);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        loadInitialData();
+        return () => { isMounted = false; };
+    }, []);
 
     const handleSort = (key) => {
         let direction = 'asc';

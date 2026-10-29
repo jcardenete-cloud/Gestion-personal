@@ -20,14 +20,14 @@ import PersonalAssignmentsSummaryPage from './pages/PersonalAssignmentsSummaryPa
 import MedicionesPage from './pages/MedicionesPage';
 import PlanificacionPage from './pages/PlanificacionPage';
 import PresupuestosPage from './pages/PresupuestosPage';
-import { useAuth } from './AuthContext';
+import { useAuth } from './authContext';
 
 function App() {
   useEffect(() => {
     console.log("App Version 4.1 Loaded — Role-based Access");
   }, []);
 
-  const { isAuthenticated, userEmail, isAdmin, isReadOnly, authLoading, authError, handleLogout, appUser } = useAuth();
+  const { isAuthenticated, userEmail, isAdmin, authLoading, authError, handleLogout, appUser } = useAuth();
 
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');

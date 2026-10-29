@@ -131,7 +131,6 @@ const Dashboard = () => {
                 setAllPersonnel(pers.data);
 
                 const activePersonal = pers.data.filter(p => p.ACTIVO === 'S');
-                const totalActive = activePersonal.length;
 
                 // Unique people with assignments to active encargos (FIN_REAL is null)
                 const activeEncargoCodes = new Set(
@@ -147,7 +146,6 @@ const Dashboard = () => {
                 );
 
                 // Intersection with active personal (in case there are assignments for inactive/deleted people)
-                const assignedCount = activePersonal.filter(p => assignedPersonIds.has(p.REF_PER)).length;
                 const unassignedCount = activePersonal.filter(p => !assignedPersonIds.has(p.REF_PER) && p.RESP === 'S').length;
 
                 // Filter and Sort Unassigned Personal (Only Responsibles 'S')

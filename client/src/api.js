@@ -180,7 +180,12 @@ const getPlanningConfig = async () => {
 
 const getPersonal = () => selectAll('LISTA_PERSONAL');
 
-const createPersonal = (data) => insertRows('LISTA_PERSONAL', data);
+const createPersonal = (data) => {
+  const personal = { ...data };
+  delete personal.REF_PER;
+  delete personal.ref_per;
+  return insertRows('LISTA_PERSONAL', personal);
+};
 
 const updatePersonal = async (data) => {
   const res = await updateRow('LISTA_PERSONAL', data, { REF_PER: data.REF_PER });

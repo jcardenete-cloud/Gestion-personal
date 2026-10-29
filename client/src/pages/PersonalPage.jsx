@@ -435,7 +435,13 @@ const PersonalPage = () => {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                                     <div className="form-group">
                                         <label>Ref Personal</label>
-                                        <input type="number" className="form-control" value={formData.REF_PER} onChange={e => setFormData({ ...formData, REF_PER: e.target.value })} disabled={editingItem || !canManage} required />
+                                        <input
+                                            type="number"
+                                            className="form-control"
+                                            value={formData.REF_PER}
+                                            disabled={!editingItem || !canManage}
+                                            placeholder={editingItem ? '' : 'Se asigna automáticamente'}
+                                        />
                                     </div>
                                     <div className="form-group">
                                         <label>Nº Ficha</label>

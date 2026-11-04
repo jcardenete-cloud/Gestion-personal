@@ -64,7 +64,7 @@ td {
   border-radius: 6px;
 }
 
-.nav-link:hover {
+.sidebar > .nav-link:hover:not(.active) {
   background: #e8f2f7;
   color: var(--primary);
 }

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Briefcase, Users, UserPlus, FolderKanban,
-    Database, Palette, LogOut, MapPin, ChevronLeft, ChevronRight,
-    ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ShieldCheck,
+    Database, LogOut, MapPin, ChevronLeft, ChevronRight,
+    RefreshCw, Calendar, ShieldCheck,
     ChartNoAxesColumn, CalendarRange, FileSpreadsheet
 } from 'lucide-react';
 import EncargosPage from './pages/EncargosPage';
@@ -29,23 +29,8 @@ function App() {
 
   const { isAuthenticated, userEmail, isAdmin, authLoading, authError, handleLogout, appUser } = useAuth();
 
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark' || saved === 'light') return 'onenote';
-    return saved || 'onenote';
-  });
   const [isSidebarPinned, setIsSidebarPinned] = useState(localStorage.getItem('sidebarPinned') !== 'false');
   const [isHovered, setIsHovered] = useState(false);
-  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-
-  useEffect(() => {
-    let themeClass = '';
-    if (theme === 'onenote') themeClass = 'onenote-theme';
-    else if (theme === 'office') themeClass = 'office-theme';
-    else if (theme === 'tragsa') themeClass = 'tragsa-theme';
-    document.documentElement.className = themeClass;
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
   const toggleSidebar = () => {
     setIsSidebarPinned(prev => {
@@ -54,12 +39,6 @@ function App() {
       return newState;
     });
   };
-
-  const themes = [
-    { id: 'onenote', label: 'Modo OneNote', icon: <Palette size={16} style={{ color: '#7719aa' }} /> },
-    { id: 'office', label: 'Modo Office', icon: <Palette size={16} style={{ color: '#0078d4' }} /> },
-    { id: 'tragsa', label: 'Modo Tragsa', icon: <Palette size={16} style={{ color: '#0874ad' }} /> },
-  ];
 
   // Loading state (auth + role resolution)
   if (authLoading) {
@@ -168,59 +147,6 @@ function App() {
         )}
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-card)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ position: 'relative' }}>
-            <button
-              className="nav-link"
-              onClick={() => setIsThemeMenuOpen(prev => !prev)}
-              style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', justifyContent: isExpanded ? 'flex-start' : 'center' }}
-            >
-              {themes.find(t => t.id === theme)?.icon}
-              {isExpanded && (
-                <>
-                  <span style={{ flex: 1, textAlign: 'left' }}>{themes.find(t => t.id === theme)?.label}</span>
-                  {isThemeMenuOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </>
-              )}
-            </button>
-            {isThemeMenuOpen && (
-              <div className="theme-menu" style={{
-                position: 'absolute',
-                bottom: '100%',
-                left: 0,
-                right: 0,
-                background: 'var(--glass2-bg)',
-                border: '1px solid var(--glass-border)',
-                borderRadius: '8px',
-                padding: '0.3rem',
-                marginBottom: '0.25rem',
-                boxShadow: '0 -4px 16px rgba(0,0,0,0.2)',
-                zIndex: 200,
-                backdropFilter: 'blur(12px)',
-              }}>
-                {themes.map(t => (
-                  <button
-                    key={t.id}
-                    className="nav-link"
-                    onClick={() => { setTheme(t.id); setIsThemeMenuOpen(false); }}
-                    style={{
-                      width: '100%',
-                      border: 'none',
-                      background: theme === t.id ? 'var(--bg-card)' : 'none',
-                      cursor: 'pointer',
-                      justifyContent: 'flex-start',
-                      fontWeight: theme === t.id ? 600 : 400,
-                      color: theme === t.id ? 'var(--primary)' : undefined,
-                      marginBottom: '0.1rem',
-                    }}
-                  >
-                    {t.icon}
-                    <span style={{ flex: 1, textAlign: 'left' }}>{t.label}</span>
-                    {theme === t.id && <Check size={14} style={{ color: 'var(--primary)' }} />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           <button className="nav-link" onClick={handleLogout} style={{ width: '100%', border: 'none', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', cursor: 'pointer', justifyContent: isExpanded ? 'flex-start' : 'center' }}>
             <LogOut size={18} /> {isExpanded && 'Cerrar Sesión'}
           </button>

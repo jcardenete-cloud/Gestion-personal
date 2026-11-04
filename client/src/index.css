@@ -69,7 +69,7 @@ td {
   color: var(--primary);
 }
 
-.nav-link.active {
+.sidebar .nav-link.active {
   background: var(--primary);
   color: #ffffff;
 }

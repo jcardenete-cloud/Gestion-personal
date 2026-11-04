@@ -61,6 +61,22 @@
   --input-text: #323130;
 }
 
+:root.tragsa-theme {
+  --primary: #0874ad;
+  --primary-hover: #005b8c;
+  --bg-dark: #eef4f7;
+  --bg-card: #ffffff;
+  --border-card: #d7e4eb;
+  --text-main: #263d4b;
+  --text-muted: #587080;
+  --glass-bg: #ffffff;
+  --glass2-bg: #ffffff;
+  --glass-border: #cbdde7;
+  --input-bg: #ffffff;
+  --input-text: #263d4b;
+  --transition-speed: 0.25s;
+}
+
 :root.onenote-theme .glass-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid #d2d0ce;
@@ -69,6 +85,58 @@
 :root.office-theme .glass-card {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.05);
   border: 1px solid #e1dfdd;
+}
+
+:root.tragsa-theme body {
+  background-color: var(--bg-dark);
+  background-image: none;
+}
+
+:root.tragsa-theme .sidebar {
+  background: var(--glass-bg);
+  backdrop-filter: none;
+  border-right: 1px solid var(--glass-border);
+}
+
+:root.tragsa-theme .glass-card {
+  background: var(--bg-card);
+  backdrop-filter: none;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(31, 74, 99, 0.08);
+}
+
+:root.tragsa-theme .btn-primary {
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 91, 140, 0.2);
+}
+
+:root.tragsa-theme th {
+  background: #e6f0f5;
+  border-bottom: 1px solid var(--border-card);
+}
+
+:root.tragsa-theme td {
+  border-bottom: 1px solid #e6edf1;
+}
+
+:root.tragsa-theme .nav-link {
+  border-radius: 6px;
+}
+
+:root.tragsa-theme .nav-link:hover {
+  background: #e8f2f7;
+  color: var(--primary);
+}
+
+:root.tragsa-theme .nav-link.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+:root.tragsa-theme .form-control {
+  border-radius: 4px;
+  border-color: #cbdde7;
 }
 
 * {

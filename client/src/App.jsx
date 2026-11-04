@@ -42,6 +42,7 @@ function App() {
     let themeClass = '';
     if (theme === 'onenote') themeClass = 'onenote-theme';
     else if (theme === 'office') themeClass = 'office-theme';
+    else if (theme === 'tragsa') themeClass = 'tragsa-theme';
     document.documentElement.className = themeClass;
     localStorage.setItem('theme', theme);
   }, [theme]);
@@ -57,6 +58,7 @@ function App() {
   const themes = [
     { id: 'onenote', label: 'Modo OneNote', icon: <Palette size={16} style={{ color: '#7719aa' }} /> },
     { id: 'office', label: 'Modo Office', icon: <Palette size={16} style={{ color: '#0078d4' }} /> },
+    { id: 'tragsa', label: 'Modo Tragsa', icon: <Palette size={16} style={{ color: '#0874ad' }} /> },
   ];
 
   // Loading state (auth + role resolution)

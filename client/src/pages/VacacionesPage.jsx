@@ -416,7 +416,7 @@ const VacacionesPage = () => {
         }
         try {
             const [resVacaciones, resFicheros] = await Promise.all([
-                api.getVacaciones(null, year || null),
+                api.getVacaciones(null, isCalendarTab ? null : (year || null)),
                 api.getVacacionesFicheros()
             ]);
             setLoadedVacaciones(resVacaciones.data);
@@ -1044,9 +1044,16 @@ const VacacionesPage = () => {
 
     const calendarEmployees = useMemo(() => {
         let list = activePersonalList;
-        // If checkbox enabled, keep only employees that have vacations loaded for the selected year
+        // The calendar may show months from two different years.
         if (calendarOnlyWithVacations) {
-            const refsWithVac = new Set((loadedVacaciones || []).map(v => v.REF_PER));
+            const firstVisibleDate = calendarMonths[0]?.days[0]?.iso;
+            const lastVisibleMonth = calendarMonths[calendarMonths.length - 1];
+            const lastVisibleDate = lastVisibleMonth?.days[lastVisibleMonth.days.length - 1]?.iso;
+            const refsWithVac = new Set((loadedVacaciones || [])
+                .filter(vac => vac.FECHA_DESDE && vac.FECHA_HASTA
+                    && vac.FECHA_DESDE.split('T')[0] <= lastVisibleDate
+                    && vac.FECHA_HASTA.split('T')[0] >= firstVisibleDate)
+                .map(vac => vac.REF_PER));
             list = list.filter(person => refsWithVac.has(person.REF_PER));
         }
         // Multi-select employee filter
@@ -1055,7 +1062,7 @@ const VacacionesPage = () => {
             return list.filter(person => selectedSet.has(person.REF_PER));
         }
         return list;
-    }, [activePersonalList, calendarFilterUsers, calendarOnlyWithVacations, loadedVacaciones]);
+    }, [activePersonalList, calendarFilterUsers, calendarOnlyWithVacations, loadedVacaciones, calendarMonths]);
 
     const calendarVacationsByPerson = useMemo(() => {
         const grouped = {};

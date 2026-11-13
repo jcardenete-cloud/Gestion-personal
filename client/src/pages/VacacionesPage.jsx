@@ -25,6 +25,20 @@ const isDateInRange = (dateKey, from, to) => {
     return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
 };
 
+const getVacationTypeForDate = (vacations, dateKey) => {
+    const matchingVacations = vacations.filter(vac =>
+        isDateInRange(dateKey, vac.FECHA_DESDE, vac.FECHA_HASTA)
+    );
+    if (matchingVacations.length === 0) return null;
+
+    const origins = matchingVacations.map(vac =>
+        String(vac.ORIGEN_FICHERO || '').toLocaleLowerCase('es')
+    );
+    if (origins.some(origin => origin.includes('turno de navidad'))) return 'christmas';
+    if (origins.some(origin => origin.includes('libre disposición'))) return 'free-disposition';
+    return 'vacation';
+};
+
 const VacacionesPage = () => {
     const { isReadOnly } = useAuth();
     const canManage = !isReadOnly;
@@ -857,7 +871,7 @@ const VacacionesPage = () => {
                 for (const month of calendarMonths) {
                     for (const day of month.days) {
                         const isWeekend = [0, 6].includes(day.weekday);
-                        const isVacation = vacations.some(v => isDateInRange(day.iso, v.FECHA_DESDE, v.FECHA_HASTA));
+                        const vacationType = getVacationTypeForDate(vacations, day.iso);
                         const isHoliday = personFestivos.has(day.iso) && !isWeekend;
 
                         let isBridge = false;
@@ -876,7 +890,9 @@ const VacacionesPage = () => {
                         if (isWeekend)        bgArgb = 'FFFCE8E8'; // rojo claro
                         else if (isHoliday)   bgArgb = 'FFD4EBFD'; // azul claro
                         else if (isBridge)    bgArgb = 'FFE8E3FE'; // lila claro
-                        else if (isVacation)  bgArgb = 'FFBBF7D0'; // verde claro
+                        else if (vacationType === 'christmas') bgArgb = 'FFFED7AA'; // naranja claro
+                        else if (vacationType === 'free-disposition') bgArgb = 'FFFEF08A'; // amarillo
+                        else if (vacationType) bgArgb = 'FFBBF7D0'; // verde claro
                         else                  bgArgb = rowIdx % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
 
                         const cell = row.getCell(colOffset);
@@ -897,6 +913,8 @@ const VacacionesPage = () => {
             [
                 { label: 'Tipo de día', argb: null, header: true },
                 { label: 'Día de vacaciones', argb: 'FFBBF7D0' },
+                { label: 'Turno de Navidad', argb: 'FFFED7AA' },
+                { label: 'Libre Disposición', argb: 'FFFEF08A' },
                 { label: 'Día festivo entre semana', argb: 'FFD4EBFD' },
                 { label: 'Puente', argb: 'FFE8E3FE' },
                 { label: 'Fin de semana', argb: 'FFFCE8E8' },
@@ -2852,6 +2870,14 @@ const VacacionesPage = () => {
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Día de vacaciones</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ width: '14px', height: '14px', borderRadius: '4px', background: '#fed7aa', display: 'inline-block', border: '1px solid rgba(249,115,22,0.35)' }} />
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Turno de Navidad</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ width: '14px', height: '14px', borderRadius: '4px', background: '#fef08a', display: 'inline-block', border: '1px solid rgba(234,179,8,0.35)' }} />
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Libre Disposición</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <span style={{ width: '14px', height: '14px', borderRadius: '4px', background: 'rgba(147,197,253,0.4)', display: 'inline-block', border: '1px solid rgba(59,130,246,0.3)' }} />
                                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Día festivo entre semana</span>
                                             </div>
@@ -2939,7 +2965,7 @@ const VacacionesPage = () => {
                                                             </td>
                                                             {calendarMonths.map(month => month.days.map(day => {
                                                                 const vacations = calendarVacationsByPerson[person.REF_PER] || [];
-                                                                const isVacation = vacations.some(vac => isDateInRange(day.iso, vac.FECHA_DESDE, vac.FECHA_HASTA));
+                                                                const vacationType = getVacationTypeForDate(vacations, day.iso);
                                                                 const isWeekend = [0, 6].includes(day.weekday);
                                                                 
                                                                 // Check if day is a holiday using real festivos from DB
@@ -2975,7 +3001,7 @@ const VacacionesPage = () => {
                                                                             height: '18px',
                                                                             padding: 0,
                                                                             textAlign: 'center',
-                                                                            background: isWeekend ? 'rgba(239,68,68,0.12)' : (isHoliday ? 'rgba(147,197,253,0.4)' : (isBridge ? 'rgba(196,181,253,0.35)' : (isVacation ? '#bbf7d0' : 'transparent'))),
+                                                                            background: isWeekend ? 'rgba(239,68,68,0.12)' : (isHoliday ? 'rgba(147,197,253,0.4)' : (isBridge ? 'rgba(196,181,253,0.35)' : (vacationType === 'christmas' ? '#fed7aa' : (vacationType === 'free-disposition' ? '#fef08a' : (vacationType ? '#bbf7d0' : 'transparent'))))),
                                                                             border: '1px solid rgba(148,163,184,0.18)'
                                                                         }}
                                                                     >

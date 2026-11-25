@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
 import logo from '../assets/tragsa_logo.png';
 import { supabase } from '../supabaseClient';
 
 const LoginPage = ({ onLogin, authError }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const displayError = error || authError || '';
@@ -98,15 +100,38 @@ const LoginPage = ({ onLogin, authError }) => {
                     </div>
                     <div className="form-group">
                         <label>Contraseña</label>
-                        <input
-                            type="password"
-                            className="form-control"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            style={{ padding: '0.8rem' }}
-                            autoComplete="current-password"
-                            required
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                className="form-control"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                style={{ padding: '0.8rem 2.8rem 0.8rem 0.8rem' }}
+                                autoComplete="current-password"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(visible => !visible)}
+                                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                aria-pressed={showPassword}
+                                style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    right: '0.75rem',
+                                    transform: 'translateY(-50%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: 0,
+                                    border: 0,
+                                    background: 'transparent',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                        </div>
                     </div>
 
                     <button

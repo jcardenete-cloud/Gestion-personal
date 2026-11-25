@@ -1,4 +1,4 @@
-/* Fuente local anterior; descomentar si se vuelve a usar Harmonia.
+
 @font-face {
   font-family: 'HarmoniaSansProCyr-Cond';
   src: url('./assets/fonts/HarmoniaSansProCyr-Cond.woff2') format('woff2'),
@@ -7,10 +7,10 @@
   font-style: normal;
   font-display: swap;
 }
-*/
+
 
 :root {
-  --app-font-family: 'Geologica', sans-serif;
+  --app-font-family:'HarmoniaSansProCyr-Cond', sans-serif;
   --app-font-weight: 300;
   /* Para volver a la fuente local, cambiar la línea anterior por:
   --app-font-family: 'HarmoniaSansProCyr-Cond', sans-serif;

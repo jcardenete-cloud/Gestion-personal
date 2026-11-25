@@ -11,6 +11,7 @@
 
 :root {
   --app-font-family: 'Geologica', sans-serif;
+  --app-font-weight: 300;
   /* Para volver a la fuente local, cambiar la línea anterior por:
   --app-font-family: 'HarmoniaSansProCyr-Cond', sans-serif;
   */
@@ -95,10 +96,12 @@ input,
 select,
 textarea {
   font-family: var(--app-font-family);
+  font-weight: var(--app-font-weight);
 }
 
 body {
   font-family: var(--app-font-family);
+  font-weight: var(--app-font-weight);
   font-size: 0.9rem;
   background-color: var(--bg-dark);
   background-image: url('/src/assets/win11_bg.png');
